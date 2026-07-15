@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAKAAR ERP - MSME Solutions</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <div id="app"></div>
+
+    <div id="appShell" style="display: none;">
+        <button id="sidebarToggleBtn" class="sidebar-toggle-btn d-lg-none" onclick="App.toggleSidebar()" aria-label="Toggle menu">
+            <i class="fas fa-bars"></i>
+        </button>
+        <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="App.toggleSidebar(false)"></div>
+
+        <aside id="sidebar" class="app-sidebar">
+            <div class="sidebar-brand">
+                <img id="sidebarLogo" src="" alt="Logo" class="sidebar-logo" style="display:none;">
+                <div id="sidebarLogoFallback" class="sidebar-logo-fallback"><i class="fas fa-industry"></i></div>
+                <div class="sidebar-brand-text">
+                    <div id="sidebarCompanyName" class="sidebar-company-name">SAKAAR ERP</div>
+                    <div class="sidebar-subtitle">MSME Solutions Platform</div>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav" id="sidebarNav">
+                <a class="sidebar-link" href="#" onclick="navigateTo('dashboard')"><i class="fas fa-chart-line"></i><span>Dashboard</span></a>
+
+                <div class="sidebar-group" data-module-nav="purchase">
+                    <button class="sidebar-group-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#grpPurchase">
+                        <i class="fas fa-truck"></i><span>Purchase</span><i class="fas fa-chevron-down ms-auto sidebar-chevron"></i>
+                    </button>
+                    <div class="collapse" id="grpPurchase" data-bs-parent="#sidebarNav">
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('vendors')"><i class="fas fa-building"></i>Vendors</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('materials')"><i class="fas fa-boxes"></i>Materials</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('purchase-orders')"><i class="fas fa-file-contract"></i>Purchase Orders</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('grn')"><i class="fas fa-clipboard-check"></i>Goods Receipt</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('invoices')"><i class="fas fa-receipt"></i>Vendor Invoices</a>
+                    </div>
+                </div>
+
+                <div class="sidebar-group" data-module-nav="indent">
+                    <button class="sidebar-group-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#grpIndent">
+                        <i class="fas fa-file-alt"></i><span>Indent</span><i class="fas fa-chevron-down ms-auto sidebar-chevron"></i>
+                    </button>
+                    <div class="collapse" id="grpIndent" data-bs-parent="#sidebarNav">
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('indent-employee')"><i class="fas fa-user"></i>Raise Indent</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('indent-approver')"><i class="fas fa-check-circle"></i>Approve Indent</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('indent-purchaser')"><i class="fas fa-shopping-cart"></i>RFQ &amp; Rates</a>
+                    </div>
+                </div>
+
+                <a class="sidebar-link" data-module-nav="expenses" href="#" onclick="navigateTo('expense-claims')"><i class="fas fa-money-check-dollar"></i><span>Expense Claims</span></a>
+
+                <div class="sidebar-group" data-module-nav="inventory">
+                    <button class="sidebar-group-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#grpInventory">
+                        <i class="fas fa-warehouse"></i><span>Inventory</span><i class="fas fa-chevron-down ms-auto sidebar-chevron"></i>
+                    </button>
+                    <div class="collapse" id="grpInventory" data-bs-parent="#sidebarNav">
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('inventory-dashboard')"><i class="fas fa-chart-bar"></i>Dashboard</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('inventory-stock-in')"><i class="fas fa-arrow-down"></i>Stock In</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('inventory-stock-out')"><i class="fas fa-arrow-up"></i>Stock Out</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('inventory-transfer')"><i class="fas fa-exchange"></i>Transfer</a>
+                    </div>
+                </div>
+
+                <a class="sidebar-link" data-module-nav="quality" href="#" onclick="navigateTo('quality')"><i class="fas fa-magnifying-glass-chart"></i><span>Quality</span></a>
+
+                <div class="sidebar-group" data-module-nav="production">
+                    <button class="sidebar-group-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#grpProduction">
+                        <i class="fas fa-industry"></i><span>Production</span><i class="fas fa-chevron-down ms-auto sidebar-chevron"></i>
+                    </button>
+                    <div class="collapse" id="grpProduction" data-bs-parent="#sidebarNav">
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('production-planning')"><i class="fas fa-tasks"></i>Planning</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('production-recipes')"><i class="fas fa-flask"></i>Bill of Materials</a>
+                    </div>
+                </div>
+
+                <a class="sidebar-link" data-module-nav="sales" href="#" onclick="navigateTo('sales-dispatch')"><i class="fas fa-truck-loading"></i><span>Sales &amp; Dispatch</span></a>
+
+                <a class="sidebar-link" data-module-nav="pos" href="#" onclick="navigateTo('pos')"><i class="fas fa-cash-register"></i><span>POS Billing</span></a>
+
+                <a class="sidebar-link" data-module-nav="accounts" href="#" onclick="navigateTo('accounts')"><i class="fas fa-receipt"></i><span>Accounts</span></a>
+
+                <a class="sidebar-link" data-module-nav="finance" href="#" onclick="navigateTo('finance')"><i class="fas fa-coins"></i><span>Finance</span></a>
+
+                <a class="sidebar-link" data-module-nav="reports" href="#" onclick="navigateTo('mis-reports')"><i class="fas fa-chart-column"></i><span>MIS Reports</span></a>
+
+                <a class="sidebar-link" data-module-nav="masters" href="#" onclick="navigateTo('master-data')"><i class="fas fa-database"></i><span>Master Data</span></a>
+
+                <div class="sidebar-group" id="adminNavItem" style="display:none">
+                    <button class="sidebar-group-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#grpAdmin">
+                        <i class="fas fa-user-shield"></i><span>Admin</span><i class="fas fa-chevron-down ms-auto sidebar-chevron"></i>
+                    </button>
+                    <div class="collapse" id="grpAdmin" data-bs-parent="#sidebarNav">
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('users')"><i class="fas fa-users-cog"></i>User Management</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('approval-settings')"><i class="fas fa-sitemap"></i>Approval Hierarchy</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('company-settings')"><i class="fas fa-building"></i>Company Settings</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('system-settings')"><i class="fas fa-cogs"></i>System Settings</a>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer dropdown">
+                <a href="#" class="sidebar-user" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                    <i class="fas fa-user-circle"></i>
+                    <span id="userDisplayName">User</span>
+                    <i class="fas fa-chevron-up ms-auto sidebar-chevron"></i>
+                </a>
+                <ul class="dropdown-menu" aria-labelledby="userDropdown">
+                    <li><a class="dropdown-item" href="#" onclick="navigateTo('profile')"><i class="fas fa-user me-1"></i>Profile</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="#" onclick="logout()"><i class="fas fa-sign-out-alt me-1"></i>Logout</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <div class="app-main">
+            <div id="content" class="container-fluid py-4"></div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <!-- App JS -->
+    <script src="/js/api.js"></script>
+    <script src="/js/auth.js"></script>
+    <script src="/js/pages/dashboard.js"></script>
+    <script src="/js/pages/vendors.js"></script>
+    <script src="/js/pages/materials.js"></script>
+    <script src="/js/pages/purchase-orders.js"></script>
+    <script src="/js/pages/grn.js"></script>
+    <script src="/js/pages/invoices.js"></script>
+    <script src="/js/pages/indent-employee.js"></script>
+    <script src="/js/pages/indent-approver.js"></script>
+    <script src="/js/pages/indent-purchaser.js"></script>
+    <script src="/js/pages/inventory-dashboard.js"></script>
+    <script src="/js/pages/inventory-stock-in.js"></script>
+    <script src="/js/pages/inventory-stock-out.js"></script>
+    <script src="/js/pages/inventory-transfer.js"></script>
+    <script src="/js/pages/production-planning.js"></script>
+    <script src="/js/pages/production-recipes.js"></script>
+    <script src="/js/pages/sales-dispatch.js"></script>
+    <script src="/js/pages/pos.js"></script>
+    <script src="/js/pages/mis.js"></script>
+    <script src="/js/pages/finance.js"></script>
+    <script src="/js/pages/expense-claims.js"></script>
+    <script src="/js/pages/accounts.js"></script>
+    <script src="/js/pages/quality.js"></script>
+    <script src="/js/pages/users.js"></script>
+    <script src="/js/pages/company-settings.js"></script>
+    <script src="/js/pages/approval-settings.js"></script>
+    <script src="/js/pages/system-settings.js"></script>
+    <script src="/js/pages/master-data-modals.js"></script>
+    <script src="/js/pages/master-data.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

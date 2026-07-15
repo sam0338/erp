@@ -1,0 +1,9 @@
+node_modules/
+backend/db/*.db
+backend/db/*.db-journal
+*.log
+.env
+packaging/node/
+packaging/app/
+packaging/*.exe
+.DS_Store
