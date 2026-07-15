@@ -30,7 +30,7 @@ jobs:
           $ver = "${{ env.NODE_VERSION }}"
           Invoke-WebRequest -Uri "https://nodejs.org/dist/v$ver/node-v$ver-win-x64.zip" -OutFile node.zip
           Expand-Archive node.zip -DestinationPath packaging
-          Rename-Item "packaging/node-v$ver-win-x64" "packaging/node"
+          Move-Item "packaging/node-v$ver-win-x64" "packaging/node"
 
       - name: Stage client app folder
         shell: pwsh
