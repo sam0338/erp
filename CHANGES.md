@@ -1516,14 +1516,289 @@ in one place. Stock List was already covered there (MIS Reports'
 existing "Stock Summary" report is the same data) — just confirmed it's
 findable and didn't need duplicating.
 
+## Round 29: Store Requisition — ask the store before it becomes an Indent
+
+New workflow, distinct from Indent: a requisition asks the store for
+something that might already be sitting in stock — no vendor, no
+procurement involved — and only escalates to an Indent for whatever the
+storekeeper genuinely can't hand over.
+
+1. **Raise Requisition** — any department can request multiple items in
+   one go, with the current system stock shown right next to each item
+   as it's picked (same live lookup the store itself checks against).
+   Drafts can be edited before submitting, same as Indent.
+2. **Store Review** — lands with the storekeeper/purchaser. For every
+   line: requested quantity, what's already been issued, current system
+   stock, and an editable "Issue Now" quantity (pre-filled with whatever
+   the system shows as available). Confirming here deducts real stock —
+   the same FIFO batch logic every other stock-out path in the app
+   already uses — not a separate, parallel bookkeeping system.
+3. **Partial issue is a first-class case, not an edge case** — if only
+   some of what's requested is physically available, issue that much and
+   leave the rest outstanding. Nothing forces an all-or-nothing decision.
+4. **Convert Shortfall to Indent** — whatever's still outstanding after
+   issuing becomes a real Indent, for exactly that shortfall quantity
+   (not the original full ask), and drops straight into the existing
+   approval → RFQ → PO pipeline from there. Every generated indent line
+   keeps a traceable link back to the exact requisition line it came
+   from, so "why does this indent exist" always has a clear answer.
+
+Tested the full lifecycle end-to-end against a real database before
+shipping it — including the specific scenario this was built for: a
+requisition where one item is short by some quantity and another is
+completely unavailable, partial issue on the first, and confirming the
+resulting indent contains exactly the shortfall amounts, correctly
+linked, with the requisition correctly marked Completed only once every
+line is genuinely resolved.
+
+### A real, wider bug found and fixed while wiring this up
+
+Populating the material dropdown on the new Raise Requisition form led
+to catching something bigger: material lookups across the app were going
+through an endpoint gated behind the **Purchase** module permission.
+That silently breaks the material dropdown for any role without Purchase
+access — a plain `employee`, for instance. It turned out **seven
+different pages** had this exact bug, not just the new requisition form:
+Raise Indent, Inventory Transfer, Stock Out, Production Planning, BOM/
+Recipes, Sales & Dispatch, and the MIS Material List report. Picking a
+material's name to request something isn't a purchase action, so all
+seven now go through a new, permission-neutral `/api/materials/lookup`
+endpoint (any logged-in user can reach it) instead. The Materials
+management page itself and the actual Purchase Order screen correctly
+stay on the fuller, Purchase-gated endpoint, since those genuinely are
+purchase-module pages.
+
+## Round 30: Store Issue Register + Item-wise Stock Ledger (MIS Reports)
+
+Two new reports under MIS Reports → Inventory.
+
+**Store Issue Register** — every requisition line that's actually been
+handed over to a department, with the full trail alongside it: who
+requested it, who approved/reviewed it and when, department, material
+category and item type, quantity requested vs. issued, and which
+warehouse it came from. Filterable by date range. This is the "monthly
+summary of material issued from store to department" — keyed off actual
+issued quantity, not just requisition status, so a still-in-progress
+requisition that's already issued *some* of its lines shows up correctly
+for what's actually left the store.
+
+**Item-wise Stock Ledger** — pick any material, get every movement in
+and out, oldest first, with a running balance — a proper bin card. Built
+by unifying every place stock actually moves: all inbound movements
+(GRN, Stock In, Production Receipt, Transfer In, Adjustment, Sales
+Return, ...) already funnel through one internal function regardless of
+source, so those come from a single table; outbound movements don't have
+an equivalent single source of truth, so this pulls from six different
+places stock leaves — Stock Out, Sales Dispatch, POS Sales, Production
+issue, Store Requisition issue, and Transfer Out — normalizes them onto
+one timeline, and computes the running balance. Tested against a seeded
+scenario covering every one of those seven movement types together
+before shipping — the total in, total out, and the balance at every
+single step were verified to match by hand, not just assumed correct
+from reading the query.
+
+One small but real gap fixed along the way: the Store Requisition
+"issue" step took a warehouse selection but never actually kept it
+anywhere afterward — added a column to persist it, since the ledger
+needs to know which warehouse a requisition issue actually came from.
+
+**Scoped honestly:** the ledger's date filter only affects which rows
+are *displayed* — the running balance itself always reflects full
+history from day one, so a balance shown for the first visible row in a
+filtered range is the true balance at that point, not reset to zero.
+That's deliberate (a ledger should never lie about the balance), but
+worth knowing if you're expecting the "in/out" totals for a filtered
+range to sum to the ending balance on their own — they won't, unless the
+range starts from the material's very first transaction.
+
+## Round 31: GST e-Invoice (IRN) + e-Way Bill — via a licensed GSP
+
+Real government e-invoicing means a Tax Invoice gets submitted to and
+authenticated by the government's Invoice Registration Portal (IRP),
+which returns an IRN (Invoice Reference Number) and a QR code that must
+appear on the invoice — without that, an invoice isn't a legally valid
+e-invoice no matter how correct its GST math is. e-Way Bill works the
+same way against a separate government system. Neither government
+system is reachable directly by third-party software — every real
+integration (Tally, SAP, every ERP vendor) goes through a licensed **GST
+Suvidha Provider (GSP)**, the same pattern already used for Google Drive
+backup: the client brings their own account and credentials, this app
+connects to it.
+
+**What's built:**
+1. **System Settings → GST Compliance** — configure a GSP connection
+   (provider name, Sandbox/Production mode, base URL, Client ID/Secret,
+   optional username/password, GSTIN), with a Test Connection button that
+   actually attempts authentication before you trust it.
+2. **Generate e-Invoice**, on every Sales Invoice — builds the real INV-01
+   e-invoice schema (seller/buyer details, item list with HSN and GST
+   breakup, value totals) from data already in the system, submits it,
+   and stores the returned IRN, acknowledgement number/date, and signed
+   QR code. The QR renders and prints directly on the tax invoice.
+   Cancellation is available within the government's 24-hour window;
+   after that, the correct path is a credit note, and the app says so
+   rather than pretending to cancel it.
+3. **Generate e-Way Bill**, on every Delivery Challan with a vehicle
+   number or transporter set — builds the e-way bill schema (from/to
+   party details, item list, vehicle) and stores the returned e-Way Bill
+   number and validity period, shown on the challan list and print.
+   Cancellation is available too.
+
+**What was actually tested, and how:** the government IRP/EWB
+authentication call and generation call themselves were **not** tested —
+that needs live network access and real GSP sandbox credentials, neither
+of which exist in the environment this was built in. What *was* tested
+directly: fed the payload-building functions realistic invoice and
+challan data and checked the output — correct state codes derived from
+state names, correct DD/MM/YYYY date formatting, correct GST/value
+totals matching the source invoice, no leaked `NaN`/`undefined`
+anywhere in the payload, and confirmed the pre-flight validation (e.g.
+refusing to build an e-Way Bill payload with no vehicle or transporter
+set) actually fires. That's the most that can honestly be verified
+without a live endpoint — the payload construction and business logic
+are solid; the actual HTTP round-trip to a real GSP is genuininely
+unverified. One real bug this caught before it shipped: neither the
+invoice nor the challan query was actually selecting the customer's
+pincode, which both payloads need — fixed.
+
+**Before this goes anywhere near a real client:** sign up with a GSP,
+point this at their Sandbox environment, and generate a real test
+e-invoice and e-way bill end to end. Every GSP wraps authentication and
+the outer response envelope slightly differently from each other —
+`getGspAuthToken()` and the response-unwrapping in `callGsp()` are the
+parts most likely to need a small adjustment for whichever specific GSP
+gets used; the payload bodies themselves are built against the
+well-established, years-stable core government schema and are the least
+likely part to need changes.
+
+**Scoped honestly:** most MSME businesses don't actually need this —
+e-invoicing is only mandatory above ₹5 crore aggregate annual turnover
+(confirmed current as of 2026); e-way bill applies to movement of goods
+above ₹50,000 regardless of turnover, so that one's more broadly
+relevant. Split-item e-way bills (part of a challan going by one vehicle,
+part by another) and multi-vehicle/consolidated e-way bills aren't
+covered — one challan, one e-way bill, one vehicle, which covers the
+overwhelming majority of real dispatches.
+
+## Round 32: PO GST calculation + GST Summary Input Tax — found and fixed
+
+Both reported issues traced back to the same underlying pattern: a value
+that should have been auto-filled from data already on file was instead
+silently defaulting to 0, with nothing in the UI signaling that anything
+was missing — so the final numbers on screen still looked plausible right
+up until someone checked the GST Summary specifically.
+
+**Purchase Order GST:** the backend's tax math was always correct — the
+problem was entirely on screen. Picking a material never filled in its
+GST rate (every material already has one on file, under Materials → GST
+Rate), so the Tax % field just sat at 0 unless someone remembered to type
+it in by hand. On top of that, the modal's running total only ever summed
+quantity × price — it never included tax at all, even when a rate *was*
+entered — so there was no way to see GST being applied while building a
+PO. Fixed both: selecting a material now fills in its GST rate
+automatically (still editable, for the rare PO that genuinely needs a
+different rate), and the modal now shows Subtotal, GST, and Grand Total
+as three separate lines instead of one misleadingly-labeled "Total Amount."
+
+**GST Summary → Input Tax (Purchases):** the Record Vendor Invoice form
+linked to a PO and pulled in an amount — but pulled the PO's *grand_total*
+(already tax-inclusive) into the field meant to hold the pre-tax amount,
+and never touched the Tax field at all, which stayed at 0. Every vendor
+invoice got saved with `tax_amount = 0` regardless of what the linked PO
+actually showed, which is exactly why Input Tax (Purchases) in GST
+Summary never added up to anything — there was nothing non-zero in the
+column it was summing. Fixed to carry the PO's real pre-tax amount and
+tax amount as two separate values, the way the rest of the form already
+expected them.
+
+**Input Tax (Expenses)** was checked too and is wired correctly — it's a
+plain, directly user-entered field with no auto-fill dependency (many
+expenses genuinely carry no GST, so it can't safely be assumed non-zero).
+If that side looks like it's not calculating, it's most likely because
+the Tax Amount field on individual expense entries hasn't been filled
+in — worth a quick look at a few recent expense records to confirm.
 
 
 
 
 
 
+## Round 33: GRN totals never included tax + a real fix for historical GST data
 
+Two more real bugs, both confirmed by reading the actual code rather than
+guessed at.
 
+**GRN showing only basic value:** `grn.total_amount` was always computed
+as `received quantity × unit price` — tax was never part of a GRN's
+total, anywhere, by design. This is exactly the figure Accounts sees on
+the GRN list and the GRN Submissions list before recording an invoice, so
+it looked exactly like "only the basic value carries through." Added
+`tax_amount`/`grand_total` as new columns alongside the existing
+`total_amount` (kept as-is for anything already relying on it staying
+basic-value) — GRN creation now computes real tax from each PO item's
+actual tax rate, and both the GRN list and Accounts' GRN Submissions list
+now show the tax-inclusive figure, relabeled "Value (incl. GST)" so it's
+unambiguous which figure it is.
 
+**GST Summary still not adding up, even after last round's fix:** last
+round's fix corrects the code path for anything created going forward —
+it can't rewrite rows that were already saved with `tax_amount = 0`
+before that fix existed. That data was never captured at all, so simply
+fixing the code doesn't recover it. Added a **Recalculate Historical GST**
+button on Finance → GST Summary (admin only) that backfills it properly:
+for every Purchase Order line item still sitting at 0% tax, it looks up
+that material's *current* GST rate (the only place a correct rate can
+plausibly be recovered from) and applies it, recomputes the PO's totals,
+then propagates the correction to any linked GRN and Vendor Invoice.
+Genuinely 0%-GST items are correctly left alone — this only touches rows
+that are actually broken, never invents tax on something legitimately
+exempt. Safe to click more than once: a second run finds nothing left
+to fix.
 
+Tested directly against a seeded "broken" PO with one 18%-GST item and
+one genuinely-exempt item, both wrongly saved at 0% tax, with a linked
+GRN and an exact-match Vendor Invoice — confirmed the recalculation
+produces the exact correct totals on all three records while leaving the
+exempt item's 0% alone. Also tested the partial-invoice case separately
+(an invoice for only part of a PO's value) — confirmed the tax gets
+derived proportionally from the PO's effective tax rate rather than
+either copying the PO's full tax figure or leaving it at zero.
 
+## Round 34: Net GST Payable highlighting, Sales Order print, and a proper GST-compliant invoice format
+
+**Net GST Payable, negative values:** a negative Net GST Payable means
+Input Tax exceeded Output Tax — that's a credit/refund situation, not a
+smaller amount owed, and easy to misread at a glance since a plain minus
+sign next to a number is easy to miss. It's now shown in red, with the
+minus sign placed clearly in front of the ₹ symbol (not buried after it,
+which is where the browser's default number formatting puts it), plus a
+plain-language label — "(Credit / Refundable — Input Tax exceeds Output
+Tax)" — on the full summary. The compact KPI card at the top of the
+Finance page gets the same red highlighting without the longer label, to
+fit the space.
+
+**Sales Order print:** added a Print button on every Sales Order, with a
+proper letterhead (company name, address, GSTIN, contact — and logo, see
+below), customer details, itemized table with HSN and per-line tax, and
+totals with Amount in Words. It's clearly labeled as a Sales Order, not a
+tax invoice — the GST invoice is still generated separately at billing
+time, which is correct: an SO is a commercial order confirmation, not
+itself a GST document.
+
+**GST-compliant invoice print, with logo:** the tax invoice print already
+had the core legally-required fields (HSN, GSTIN of both parties, place
+of supply, CGST/SGST/IGST breakup, invoice number/date) from earlier
+work — what it was missing:
+- **Company logo** — added to the letterhead, pulled from the same
+  `logo_data_url` already used for branding elsewhere in the app, so
+  there's nothing new to configure if it's already set under Company
+  Settings.
+- **Amount in Words** — added, in proper Indian numbering (crore/lakh/
+  thousand, not the international million/billion grouping). Tested
+  directly against a wide range of amounts, including the exact
+  lakh/crore boundaries and paise handling, before trusting it.
+- **Reverse Charge Applicable: No** declaration — a standard line on
+  Indian GST invoices, added next to the document title.
+
+The Sales Order print reuses the exact same letterhead/logo treatment,
+so both documents look consistent.

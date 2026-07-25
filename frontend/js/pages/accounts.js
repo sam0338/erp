@@ -46,7 +46,7 @@ const AccountsPage = {
                 <th>GRN Number</th>
                 <th>PO Number</th>
                 <th>Vendor</th>
-                <th>Amount</th>
+                <th>Value (incl. GST)</th>
                 <th>Submitted By</th>
                 <th>Submitted On</th>
                 <th>Status</th>
@@ -119,7 +119,7 @@ const AccountsActions = {
             <td><strong>${s.grn_number}</strong></td>
             <td>${s.po_number || '-'}</td>
             <td>${s.vendor_name || '-'}</td>
-            <td>₹${parseFloat(s.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            <td>₹${parseFloat(s.grand_total || s.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
             <td>${s.submitted_by_name || '-'}</td>
             <td>${new Date(s.submitted_at).toLocaleString('en-IN')}</td>
             <td><span class="badge bg-${s.status === 'Acknowledged' ? 'success' : 'warning'}">${s.status}</span></td>

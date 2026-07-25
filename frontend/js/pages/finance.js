@@ -139,7 +139,13 @@ const FinancePage = {
         <div class="row mb-3">
           <div class="col-md-3"><input type="date" class="form-control form-control-sm" id="gstFrom"></div>
           <div class="col-md-3"><input type="date" class="form-control form-control-sm" id="gstTo"></div>
-          <div class="col-md-3"><button class="btn btn-sm btn-primary" onclick="FinancePage.loadGst()">Apply</button> <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('gstFrom').value='';document.getElementById('gstTo').value='';FinancePage.loadGst()">All Time</button></div>
+          <div class="col-md-6 text-end">
+            <button class="btn btn-sm btn-primary" onclick="FinancePage.loadGst()">Apply</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('gstFrom').value='';document.getElementById('gstTo').value='';FinancePage.loadGst()">All Time</button>
+            <button class="btn btn-sm btn-outline-warning" onclick="FinancePage.recalculateGst()" title="Fixes historical POs/GRNs/Invoices that were saved with missing GST, using each material's current GST rate">
+              <i class="fas fa-calculator me-1"></i>Recalculate Historical GST
+            </button>
+          </div>
         </div>
         <div id="gstSummaryContainer"><div class="text-center text-muted py-4">Loading...</div></div>
       </div>
@@ -226,6 +232,21 @@ const FinancePage = {
   `,
 
   fmt: (n) => '₹' + (parseFloat(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+
+  // Net GST Payable going negative means Input Tax exceeded Output Tax —
+  // a credit/refund situation, not something owed. Easy to misread as
+  // "just a smaller payable" at a glance, so this makes it impossible to
+  // miss: red, an explicit minus sign in front of the ₹ (not buried after
+  // it, which is where the browser's default number formatting puts it),
+  // and a plain-language label alongside the number.
+  fmtGstPayable: (n, compact) => {
+    const value = parseFloat(n) || 0;
+    const amount = '₹' + Math.abs(value).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    if (value < 0) {
+      return `<span class="text-danger fw-bold">-${amount}</span>${compact ? '' : ' <span class="text-danger small">(Credit / Refundable — Input Tax exceeds Output Tax)</span>'}`;
+    }
+    return `<span class="fw-bold">${amount}</span>`;
+  },
   vendors: [],
 
   // Renders mapped rows, a clear error message if the API call failed, or
@@ -352,7 +373,7 @@ const FinancePage = {
     const data = await API.getGstSummary(from, to);
     const container = document.getElementById('gstSummaryContainer');
     if (!data || data.error) { container.innerHTML = `<div class="text-danger">${(data && data.error) || 'Could not load GST summary'}</div>`; return; }
-    document.getElementById('kpiGst').textContent = FinancePage.fmt(data.net_gst_payable);
+    document.getElementById('kpiGst').innerHTML = FinancePage.fmtGstPayable(data.net_gst_payable, true);
     container.innerHTML = `
       <div class="row">
         <div class="col-md-6 mb-3">
@@ -372,9 +393,25 @@ const FinancePage = {
           </div>
         </div>
       </div>
-      <div class="alert alert-info">Net GST Payable (Output − Input): <strong>${FinancePage.fmt(data.net_gst_payable)}</strong></div>
+      <div class="alert alert-info">Net GST Payable (Output − Input): ${FinancePage.fmtGstPayable(data.net_gst_payable)}</div>
       <div class="text-muted small">This is a transaction-linked GST summary for visibility — not a filed return. Verify against your GSTR working before filing.</div>
     `;
+  },
+
+  // Fixes historical POs/GRNs/Invoices saved with missing GST (from
+  // before the GST calculation bugs were fixed) — backfills each PO
+  // line's tax rate from its material's current GST rate, then
+  // recomputes everything downstream. Safe to click more than once:
+  // it only ever touches records that are currently at zero tax.
+  recalculateGst: async () => {
+    if (!confirm('This will backfill missing GST on historical Purchase Orders, GRNs, and Vendor Invoices using each material\'s current GST rate. It only touches records currently showing zero tax — nothing already-correct gets changed. Continue?')) return;
+    const result = await API.recalculateGst();
+    if (result && !result.error) {
+      alert(result.message || 'Recalculation complete');
+      await FinancePage.loadGst();
+    } else {
+      alert('Error: ' + ((result && result.error) || 'Something went wrong'));
+    }
   },
 
   loadStaging: async () => {

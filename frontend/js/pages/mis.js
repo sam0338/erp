@@ -18,7 +18,7 @@ const MIS_REPORT_CATALOG = {
       },
       {
         key: 'material-list', title: 'Material List', dateFiltered: false,
-        fetch: async () => { const r = await API.getMaterials(); return Array.isArray(r) ? r : []; },
+        fetch: async () => { const r = await API.getMaterialsLookup(); return Array.isArray(r) ? r : []; },
         columns: [
           { key: 'material_code', label: 'Material Code' }, { key: 'material_name', label: 'Material Name' },
           { key: 'item_type', label: 'Item Type' }, { key: 'category', label: 'Category' }, { key: 'unit_of_measure', label: 'Unit' },
@@ -79,6 +79,25 @@ const MIS_REPORT_CATALOG = {
           { key: 'material_name', label: 'Material' }, { key: 'warehouse_name', label: 'Warehouse' },
           { key: 'batch_number', label: 'Batch' }, { key: 'age_days', label: 'Age (days)' },
           { key: 'quantity_remaining', label: 'Qty Remaining' }
+        ]
+      },
+      {
+        key: 'store-issue-register', title: 'Store Issue Register (Issued to Dept)', dateFiltered: true,
+        fetch: (f) => API.misReport('store-issue-register', f),
+        columns: [
+          { key: 'requisition_number', label: 'Requisition No' }, { key: 'department', label: 'Department' },
+          { key: 'material_name', label: 'Material' }, { key: 'category', label: 'Category' }, { key: 'item_type', label: 'Item Type' },
+          { key: 'quantity_requested', label: 'Requested' }, { key: 'quantity_issued', label: 'Issued' }, { key: 'unit_of_measure', label: 'Unit' },
+          { key: 'requested_by_name', label: 'Requested By' }, { key: 'approved_by_name', label: 'Approved By' },
+          { key: 'approved_at', label: 'Approved On', date: true }, { key: 'issued_from_warehouse', label: 'From Warehouse' }
+        ]
+      },
+      {
+        key: 'item-ledger', title: 'Item-wise Stock Ledger', dateFiltered: true, materialFiltered: true,
+        fetch: (f) => API.misReport('item-ledger', f),
+        columns: [
+          { key: 'txn_date', label: 'Date', date: true }, { key: 'txn_type', label: 'Transaction' }, { key: 'reference', label: 'Reference' },
+          { key: 'warehouse_name', label: 'Warehouse' }, { key: 'qty_in', label: 'In' }, { key: 'qty_out', label: 'Out' }, { key: 'balance', label: 'Balance' }
         ]
       }
     ]
@@ -264,6 +283,14 @@ const MISPage = {
     if (!report) return;
     MISPage.currentReport = report;
 
+    let materialOptionsHtml = '';
+    if (report.materialFiltered) {
+      const materials = await API.getMaterialsLookup();
+      materialOptionsHtml = '<option value="">Select a material...</option>' + (Array.isArray(materials) ? materials : []).map(m =>
+        `<option value="${m.id}">${m.material_name} (${m.material_code})</option>`
+      ).join('');
+    }
+
     const area = document.getElementById('misReportArea');
     area.innerHTML = `
       <div class="card border-0 shadow-sm mb-3">
@@ -272,10 +299,12 @@ const MISPage = {
             <h5 class="mb-2">${report.title}</h5>
             <button class="btn btn-sm btn-outline-success" onclick="MISPage.exportCSV()"><i class="fas fa-file-csv me-1"></i>Export CSV</button>
           </div>
-          ${report.dateFiltered ? `
+          ${report.materialFiltered || report.dateFiltered ? `
           <div class="row g-2 align-items-end mt-1">
+            ${report.materialFiltered ? `<div class="col-md-4"><label class="form-label small">Material *</label><select class="form-control form-control-sm" id="misMaterial">${materialOptionsHtml}</select></div>` : ''}
+            ${report.dateFiltered ? `
             <div class="col-md-3"><label class="form-label small">From</label><input type="date" class="form-control form-control-sm" id="misFrom"></div>
-            <div class="col-md-3"><label class="form-label small">To</label><input type="date" class="form-control form-control-sm" id="misTo"></div>
+            <div class="col-md-3"><label class="form-label small">To</label><input type="date" class="form-control form-control-sm" id="misTo"></div>` : ''}
             <div class="col-md-2"><button class="btn btn-sm btn-primary w-100" onclick="MISPage.runReport()">Apply</button></div>
           </div>` : ''}
         </div>
@@ -296,10 +325,21 @@ const MISPage = {
     const report = MISPage.currentReport;
     if (!report) return;
     const body = document.getElementById('misReportBody');
+
+    if (report.materialFiltered) {
+      const materialId = document.getElementById('misMaterial') ? document.getElementById('misMaterial').value : '';
+      if (!materialId) {
+        body.innerHTML = `<tr><td colspan="${report.columns.length}" class="text-center text-muted py-4">Select a material above, then click Apply.</td></tr>`;
+        MISPage.currentRows = [];
+        return;
+      }
+    }
+
     body.innerHTML = `<tr><td colspan="${report.columns.length}" class="text-center text-muted py-4">Loading...</td></tr>`;
-    const filters = report.dateFiltered
-      ? { from: document.getElementById('misFrom') ? document.getElementById('misFrom').value : '', to: document.getElementById('misTo') ? document.getElementById('misTo').value : '' }
-      : {};
+    const filters = {
+      ...(report.dateFiltered ? { from: document.getElementById('misFrom') ? document.getElementById('misFrom').value : '', to: document.getElementById('misTo') ? document.getElementById('misTo').value : '' } : {}),
+      ...(report.materialFiltered ? { material_id: document.getElementById('misMaterial').value } : {})
+    };
     const rows = await report.fetch(filters);
     if (!Array.isArray(rows)) {
       body.innerHTML = `<tr><td colspan="${report.columns.length}" class="text-center text-danger py-3">${(rows && rows.error) || 'Could not load this report'}</td></tr>`;

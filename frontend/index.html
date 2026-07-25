@@ -54,6 +54,16 @@
                     </div>
                 </div>
 
+                <div class="sidebar-group" data-module-nav="requisition">
+                    <button class="sidebar-group-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#grpRequisition">
+                        <i class="fas fa-dolly"></i><span>Store Requisition</span><i class="fas fa-chevron-down ms-auto sidebar-chevron"></i>
+                    </button>
+                    <div class="collapse" id="grpRequisition" data-bs-parent="#sidebarNav">
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('requisition-employee')"><i class="fas fa-user"></i>Raise Requisition</a>
+                        <a class="sidebar-sublink" href="#" onclick="navigateTo('requisition-store')"><i class="fas fa-warehouse"></i>Store Review</a>
+                    </div>
+                </div>
+
                 <a class="sidebar-link" data-module-nav="expenses" href="#" onclick="navigateTo('expense-claims')"><i class="fas fa-money-check-dollar"></i><span>Expense Claims</span></a>
 
                 <div class="sidebar-group" data-module-nav="inventory">
@@ -138,6 +148,8 @@
     <script src="/js/pages/indent-employee.js"></script>
     <script src="/js/pages/indent-approver.js"></script>
     <script src="/js/pages/indent-purchaser.js"></script>
+    <script src="/js/pages/requisition-employee.js"></script>
+    <script src="/js/pages/requisition-store.js"></script>
     <script src="/js/pages/inventory-dashboard.js"></script>
     <script src="/js/pages/inventory-stock-in.js"></script>
     <script src="/js/pages/inventory-stock-out.js"></script>

@@ -138,7 +138,7 @@ const ProductionRecipesPage = {
   },
 
   init: async () => {
-    const materialsResult = await API.getMaterials();
+    const materialsResult = await API.getMaterialsLookup();
     RecipeModal.materials = Array.isArray(materialsResult) ? materialsResult : [];
     const routingsResult = await API.getRoutings();
     RecipeModal.routings = Array.isArray(routingsResult) ? routingsResult : [];

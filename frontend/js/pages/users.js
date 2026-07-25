@@ -26,6 +26,7 @@ const MODULE_LABELS = {
   dashboard: 'Dashboard',
   purchase: 'Purchase',
   indent: 'Indent',
+  requisition: 'Store Requisition',
   inventory: 'Inventory',
   quality: 'Quality',
   production: 'Production',

@@ -296,6 +296,12 @@ const App = {
       case 'indent-purchaser':
         pageModule = IndentPurchaserPage;
         break;
+      case 'requisition-employee':
+        pageModule = RequisitionEmployeePage;
+        break;
+      case 'requisition-store':
+        pageModule = RequisitionStorePage;
+        break;
       case 'inventory-dashboard':
         pageModule = InventoryDashboardPage;
         break;

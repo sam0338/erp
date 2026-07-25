@@ -189,7 +189,12 @@ const IndentModal = {
   },
 
   loadMaterials: async () => {
-    const materials = await API.getMaterials();
+    // BUG FIX: this used to call API.getMaterials(), which hits the
+    // Purchase-module-gated endpoint — a plain 'employee' role (no
+    // purchase permission) couldn't populate this dropdown at all,
+    // silently breaking Raise Indent for exactly the role most likely to
+    // use it. Picking a material's name isn't a purchase action.
+    const materials = await API.getMaterialsLookup();
     IndentModal.materials = Array.isArray(materials) ? materials : [];
   },
 
