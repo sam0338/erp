@@ -63,7 +63,7 @@ const StockTransferPage = {
     </div>
   `,
   init: async () => {
-    const materials = await API.getMaterials() || [];
+    const materials = await API.getMaterialsLookup() || [];
     const warehouses = await API.getWarehouses() || [];
     const transfers = await API.getStockTransferList() || [];
 

@@ -141,8 +141,16 @@ const PurchaseOrdersPage = {
 
                 <div class="border-top pt-3">
                   <div class="row">
+                    <div class="col-md-8 text-end"><span class="text-muted">Subtotal (before tax):</span></div>
+                    <div class="col-md-4"><span id="poSubtotal">₹0.00</span></div>
+                  </div>
+                  <div class="row">
+                    <div class="col-md-8 text-end"><span class="text-muted">GST:</span></div>
+                    <div class="col-md-4"><span id="poTaxAmount">₹0.00</span></div>
+                  </div>
+                  <div class="row">
                     <div class="col-md-8 text-end">
-                      <h6>Total Amount:</h6>
+                      <h6>Grand Total:</h6>
                     </div>
                     <div class="col-md-4">
                       <h6 id="totalAmount">₹0.00</h6>
@@ -251,7 +259,7 @@ const POModal = {
           <div class="row">
             <div class="col-md-4">
               <label class="form-label">Material</label>
-              <select class="form-control material-select" onchange="POModal.calculateTotal()" data-item="${POModal.poItemCount}">
+              <select class="form-control material-select" onchange="POModal.onMaterialChange(this)" data-item="${POModal.poItemCount}">
                 <option value="">Select Material</option>
                 ${POModal.materials.map(m => `<option value="${m.id}" data-gst="${m.gst_rate}" ${itemData && parseInt(itemData.material_id) === parseInt(m.id) ? 'selected' : ''}>${m.material_name}</option>`).join('')}
               </select>
@@ -297,14 +305,40 @@ const POModal = {
     POModal.calculateTotal();
   },
 
+  // BUG FIX: picking a material never filled in its GST rate — the Tax %
+  // field just sat at 0 unless someone remembered to type it in by hand,
+  // which is the other half of "GST calculation isn't working." Every
+  // material already has its GST rate on file (Materials → GST Rate);
+  // this uses it as the starting point for the line, still editable
+  // afterward if a specific PO genuinely needs a different rate.
+  onMaterialChange: (selectEl) => {
+    const option = selectEl.options[selectEl.selectedIndex];
+    const gstRate = option ? option.dataset.gst : null;
+    const row = selectEl.closest('.po-item');
+    if (row && gstRate !== null && gstRate !== undefined && gstRate !== '') {
+      row.querySelector('.tax-input').value = gstRate;
+    }
+    POModal.calculateTotal();
+  },
+
   calculateTotal: () => {
-    let total = 0;
+    let subtotal = 0, taxTotal = 0;
     document.querySelectorAll('.po-item').forEach(item => {
-      const qty = item.querySelector('.qty-input').value || 0;
-      const price = item.querySelector('.price-input').value || 0;
-      total += parseFloat(qty) * parseFloat(price);
+      const qty = parseFloat(item.querySelector('.qty-input').value) || 0;
+      const price = parseFloat(item.querySelector('.price-input').value) || 0;
+      const taxRate = parseFloat(item.querySelector('.tax-input').value) || 0;
+      const lineBase = qty * price;
+      subtotal += lineBase;
+      taxTotal += lineBase * (taxRate / 100);
     });
-    document.getElementById('totalAmount').textContent = '₹' + total.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    // BUG FIX: this used to only sum qty*price and call it "Total Amount"
+    // — GST never factored into the number on screen at all, even when a
+    // tax rate was typed in. The backend was always computing tax
+    // correctly on save; the modal just never showed it, which is what
+    // made it look like GST wasn't being calculated.
+    document.getElementById('poSubtotal').textContent = '₹' + subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    document.getElementById('poTaxAmount').textContent = '₹' + taxTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    document.getElementById('totalAmount').textContent = '₹' + (subtotal + taxTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 });
   },
 
   submit: async (event) => {

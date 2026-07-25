@@ -119,7 +119,7 @@ const DashboardPage = {
     const vendors = await API.getVendors() || [];
     const pos = await API.getPurchaseOrders() || [];
     const invoices = await API.getInvoices() || [];
-    const materials = await API.getMaterials() || [];
+    const materials = await API.getMaterialsLookup() || [];
 
     document.getElementById('vendorCount').textContent = vendors.length || 0;
     document.getElementById('poCount').textContent = pos.filter(p => ['Draft', 'Pending Approval', 'Approved'].includes(p.status)).length || 0;

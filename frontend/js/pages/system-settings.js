@@ -16,6 +16,7 @@ const SystemSettingsPage = {
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#notifTab">Notification Templates</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#backupTab">Backup &amp; Restore</button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#licenseTab">License</button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#gstComplianceTab">GST Compliance</button></li>
       </ul>
 
       <div class="tab-content">
@@ -205,6 +206,85 @@ const SystemSettingsPage = {
           </div>
         </div>
 
+        <!-- GST COMPLIANCE (e-Invoice / e-Way Bill) -->
+        <div class="tab-pane fade" id="gstComplianceTab">
+          <div class="alert alert-warning small">
+            <i class="fas fa-triangle-exclamation me-2"></i>
+            <strong>Real government integration, via a licensed GSP.</strong> This connects to a GST Suvidha Provider
+            (e.g. MasterGST, ClearTax, Vayana) — not the government directly. You need your own GSP account and API
+            credentials; this app can't create one for you. <strong>Always test in your GSP's Sandbox mode first</strong>
+            and confirm a real test e-Invoice/e-Way Bill generates correctly before switching to Production.
+          </div>
+          <div class="row">
+            <div class="col-md-7 mb-3">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <h5><i class="fas fa-file-invoice me-2"></i>GSP Connection</h5>
+                  <div class="row">
+                    <div class="col-md-6 mb-2">
+                      <label class="form-label small">Provider Name</label>
+                      <input type="text" class="form-control" id="gspProviderName" placeholder="e.g. MasterGST">
+                    </div>
+                    <div class="col-md-6 mb-2">
+                      <label class="form-label small">Mode</label>
+                      <select class="form-control" id="gspIsSandbox">
+                        <option value="1">Sandbox (Testing)</option>
+                        <option value="0">Production (Live)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="mb-2">
+                    <label class="form-label small">API Base URL</label>
+                    <input type="text" class="form-control" id="gspBaseUrl" placeholder="https://api.yourgsp.com/v1">
+                  </div>
+                  <div class="row">
+                    <div class="col-md-6 mb-2">
+                      <label class="form-label small">Client ID</label>
+                      <input type="text" class="form-control" id="gspClientId">
+                    </div>
+                    <div class="col-md-6 mb-2">
+                      <label class="form-label small">Client Secret</label>
+                      <input type="password" class="form-control" id="gspClientSecret" placeholder="Leave blank to keep existing">
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col-md-4 mb-2">
+                      <label class="form-label small">Username (if required)</label>
+                      <input type="text" class="form-control" id="gspUsername">
+                    </div>
+                    <div class="col-md-4 mb-2">
+                      <label class="form-label small">Password (if required)</label>
+                      <input type="password" class="form-control" id="gspPassword" placeholder="Leave blank to keep existing">
+                    </div>
+                    <div class="col-md-4 mb-2">
+                      <label class="form-label small">GSTIN</label>
+                      <input type="text" class="form-control" id="gspGstin">
+                    </div>
+                  </div>
+                  <button class="btn btn-primary" onclick="GstComplianceActions.save()">Save</button>
+                  <button class="btn btn-outline-secondary" onclick="GstComplianceActions.testConnection()">Test Connection</button>
+                  <div id="gspTestResult" class="mt-2 small"></div>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-5 mb-3">
+              <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                  <h5>Status</h5>
+                  <div id="gspStatusBlock" class="small text-muted">Loading...</div>
+                  <hr>
+                  <p class="small text-muted mb-1">Once connected:</p>
+                  <ul class="small text-muted">
+                    <li>"Generate e-Invoice" appears on each Sales Invoice — creates a real IRN + QR code</li>
+                    <li>"Generate e-Way Bill" appears on each Delivery Challan with a vehicle/transporter set</li>
+                    <li>e-Invoices can only be cancelled within 24 hours (government rule) — after that, issue a credit note</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- Branch Modal -->
@@ -286,7 +366,8 @@ const SystemSettingsPage = {
       NotifActions.load(),
       BackupActions.loadGdriveStatus(),
       BackupActions.loadSchedule(),
-      LicenseActions.load()
+      LicenseActions.load(),
+      GstComplianceActions.load()
     ]);
     document.getElementById('gdriveRedirectUriHint').textContent = `${window.location.origin}/api/settings/gdrive/callback`;
   }
@@ -743,6 +824,67 @@ const LicenseActions = {
       await LicenseActions.load();
     } else {
       alert('Error: ' + ((result && result.error) || 'Something went wrong'));
+    }
+  }
+};
+
+const GstComplianceActions = {
+  load: async () => {
+    const settings = await API.getGstGspSettings();
+    const statusBlock = document.getElementById('gspStatusBlock');
+    if (!settings || settings.error) {
+      statusBlock.innerHTML = '<span class="text-danger">Could not load settings</span>';
+      return;
+    }
+    document.getElementById('gspProviderName').value = settings.provider_name || '';
+    document.getElementById('gspIsSandbox').value = settings.is_sandbox === 0 ? '0' : '1';
+    document.getElementById('gspBaseUrl').value = settings.base_url || '';
+    document.getElementById('gspClientId').value = settings.client_id || '';
+    document.getElementById('gspUsername').value = settings.username || '';
+    document.getElementById('gspGstin').value = settings.gstin || '';
+
+    if (settings.base_url && settings.client_id) {
+      statusBlock.innerHTML = `
+        <span class="badge bg-${settings.is_sandbox ? 'warning' : 'success'}">${settings.is_sandbox ? 'Sandbox Mode' : 'Production Mode'}</span>
+        <p class="mt-2 mb-0">Provider: <strong>${settings.provider_name || 'Not named'}</strong></p>
+        <p class="mb-0">GSTIN: ${settings.gstin || '-'}</p>
+        <p class="mb-0 text-muted">${settings.has_credentials ? 'Credentials saved' : 'No credentials saved yet'}</p>
+      `;
+    } else {
+      statusBlock.innerHTML = '<span class="text-muted">Not configured yet.</span>';
+    }
+  },
+
+  save: async () => {
+    const data = {
+      provider_name: document.getElementById('gspProviderName').value,
+      is_sandbox: document.getElementById('gspIsSandbox').value === '1',
+      base_url: document.getElementById('gspBaseUrl').value,
+      client_id: document.getElementById('gspClientId').value,
+      client_secret: document.getElementById('gspClientSecret').value,
+      username: document.getElementById('gspUsername').value,
+      password: document.getElementById('gspPassword').value,
+      gstin: document.getElementById('gspGstin').value
+    };
+    const result = await API.saveGstGspSettings(data);
+    if (result && !result.error) {
+      alert(result.message || 'Saved');
+      document.getElementById('gspClientSecret').value = '';
+      document.getElementById('gspPassword').value = '';
+      await GstComplianceActions.load();
+    } else {
+      alert('Error: ' + ((result && result.error) || 'Something went wrong'));
+    }
+  },
+
+  testConnection: async () => {
+    const el = document.getElementById('gspTestResult');
+    el.innerHTML = '<span class="text-muted">Testing...</span>';
+    const result = await API.testGstGspConnection();
+    if (result && !result.error) {
+      el.innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>${result.message}</span>`;
+    } else {
+      el.innerHTML = `<span class="text-danger"><i class="fas fa-times-circle me-1"></i>${(result && result.error) || 'Connection failed'}</span>`;
     }
   }
 };

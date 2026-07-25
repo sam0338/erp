@@ -436,7 +436,7 @@ const ProductionPlanningPage = {
 
   loadMasters: async () => {
     const [orders, materials, warehouses, machines, employees] = await Promise.all([
-      API.getProductionOrders(), API.getMaterials(), API.getWarehouses(), API.getMachines(), API.getEmployees()
+      API.getProductionOrders(), API.getMaterialsLookup(), API.getWarehouses(), API.getMachines(), API.getEmployees()
     ]);
     const asArray = (v) => Array.isArray(v) ? v : [];
     ProductionPlanningPage.masters = {

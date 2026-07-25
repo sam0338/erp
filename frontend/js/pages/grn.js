@@ -22,7 +22,7 @@ const GRNPage = {
                   <th>PO Number</th>
                   <th>Vendor</th>
                   <th>GRN Date</th>
-                  <th>Total Amount</th>
+                  <th>Value (incl. GST)</th>
                   <th>Status</th>
                   <th>Accounts</th>
                   <th>Actions</th>
@@ -245,7 +245,7 @@ const GRNModal = {
             <td>${grn.po_number}</td>
             <td>${grn.vendor_name}</td>
             <td>${new Date(grn.grn_date).toLocaleDateString('en-IN')}</td>
-            <td>₹${parseFloat(grn.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+            <td>₹${parseFloat(grn.grand_total || grn.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
             <td><span class="badge bg-${grn.status === 'Pending' ? 'warning' : 'success'}">${grn.status}</span></td>
             <td>${accountsBadge}</td>
             <td>

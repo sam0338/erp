@@ -196,6 +196,7 @@ class API {
 
   // ===== MATERIALS =====
   static getMaterials() { return this.request('GET', '/purchase/materials'); }
+  static getMaterialsLookup() { return this.request('GET', '/materials/lookup'); }
   static createMaterial(data) { return this.request('POST', '/purchase/materials', data); }
 
   // ===== PURCHASE ORDERS =====
@@ -359,6 +360,7 @@ class API {
   static getCustomerOutstanding() { return this.request('GET', '/finance/customer-outstanding'); }
   static getMarginReport() { return this.request('GET', '/finance/margin-report'); }
   static getGstSummary(from, to) { return this.request('GET', `/finance/gst-summary${from && to ? `?from=${from}&to=${to}` : ''}`); }
+  static recalculateGst() { return this.request('POST', '/finance/recalculate-gst'); }
   static getAccountingStaging(status) { return this.request('GET', `/finance/staging${status ? `?status=${status}` : ''}`); }
   static syncAccountingStaging() { return this.request('POST', '/finance/staging/sync'); }
   static async exportAccountingStaging() {
@@ -390,6 +392,15 @@ class API {
   static getExpenseClaim(id) { return this.request('GET', `/expenses/claims/${id}`); }
   static getExpenseClaimsSummary() { return this.request('GET', '/expenses/summary'); }
 
+  // ===== GST e-Invoice / e-Way Bill (GSP) =====
+  static getGstGspSettings() { return this.request('GET', '/settings/gst-gsp'); }
+  static saveGstGspSettings(data) { return this.request('PUT', '/settings/gst-gsp', data); }
+  static testGstGspConnection() { return this.request('POST', '/settings/gst-gsp/test-connection'); }
+  static generateEinvoice(invoiceId) { return this.request('POST', `/finance/invoices/${invoiceId}/generate-einvoice`); }
+  static cancelEinvoice(invoiceId, reason) { return this.request('POST', `/finance/invoices/${invoiceId}/cancel-einvoice`, { reason }); }
+  static generateEwaybill(challanId) { return this.request('POST', `/sales/challans/${challanId}/generate-ewaybill`); }
+  static cancelEwaybill(challanId, reason) { return this.request('POST', `/sales/challans/${challanId}/cancel-ewaybill`, { reason }); }
+
   // ===== INDENT =====
   static raiseIndent(data) { return this.request('POST', '/indent/create', data); }
   static updateIndent(id, data) { return this.request('PUT', `/indent/${id}`, data); }
@@ -405,6 +416,17 @@ class API {
   static getIndentQuotations(indentId) { return this.request('GET', `/indent/${indentId}/quotations`); }
   static evaluateRates(indentId, rates) { return this.request('POST', `/indent/${indentId}/evaluate-rates`, rates); }
   static generatePO(indentId, data) { return this.request('POST', `/indent/${indentId}/generate-po`, data); }
+
+  // ===== STORE REQUISITION =====
+  static raiseRequisition(data) { return this.request('POST', '/requisition/create', data); }
+  static updateRequisition(id, data) { return this.request('PUT', `/requisition/${id}`, data); }
+  static getRequisition(id) { return this.request('GET', `/requisition/${id}`); }
+  static getMyRequisitions() { return this.request('GET', '/requisition/my-requisitions'); }
+  static getRequisitionsPendingReview() { return this.request('GET', '/requisition/pending-review'); }
+  static getRequisitionMaterialAvailability(materialId) { return this.request('GET', `/requisition/inventory/material/${materialId}`); }
+  static submitRequisition(id) { return this.request('PUT', `/requisition/${id}/submit`); }
+  static issueRequisitionItems(id, data) { return this.request('POST', `/requisition/${id}/issue`, data); }
+  static convertRequisitionToIndent(id, itemIds) { return this.request('POST', `/requisition/${id}/convert-to-indent`, { item_ids: itemIds }); }
 }
 
 // Shared by every "Export" button across the app (Vendors, Materials,

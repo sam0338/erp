@@ -407,7 +407,7 @@ const SalesDispatchPage = {
 
   loadMasters: async () => {
     const [customers, materials, warehouses, orders, paymentTerms, transporters] = await Promise.all([
-      API.getCustomers(), API.getMaterials(), API.getWarehouses(), API.getSalesOrders(),
+      API.getCustomers(), API.getMaterialsLookup(), API.getWarehouses(), API.getSalesOrders(),
       API.getSimpleMasters('payment_term'), API.getSimpleMasters('transporter')
     ]);
     // Array.isArray (not `|| []`) matters here: a failed call returns a
@@ -437,6 +437,35 @@ const SalesDispatchPage = {
   transporterOptions: () => '<option value="">— None —</option>' + SalesDispatchPage.masters.transporters.map(t => `<option value="${t.name}">${t.name}</option>`).join(''),
 
   fmt: (n) => '₹' + (parseFloat(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 }),
+
+  // Indian numbering (crore/lakh/thousand, not the international
+  // million/billion grouping) — standard on every GST tax invoice.
+  amountInWords: (n) => {
+    const num = Math.round((parseFloat(n) || 0) * 100); // work in paise to avoid float rounding
+    const rupees = Math.floor(num / 100);
+    const paise = num % 100;
+    const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+      'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+    const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+    const twoDigits = (v) => v < 20 ? ones[v] : (tens[Math.floor(v / 10)] + (v % 10 ? ' ' + ones[v % 10] : ''));
+    const threeDigits = (v) => (v >= 100 ? ones[Math.floor(v / 100)] + ' Hundred' + (v % 100 ? ' ' + twoDigits(v % 100) : '') : twoDigits(v));
+    const wordsFor = (value) => {
+      if (value === 0) return 'Zero';
+      const crore = Math.floor(value / 10000000); value %= 10000000;
+      const lakh = Math.floor(value / 100000); value %= 100000;
+      const thousand = Math.floor(value / 1000); value %= 1000;
+      const hundred = value;
+      let parts = [];
+      if (crore) parts.push(threeDigits(crore) + ' Crore');
+      if (lakh) parts.push(threeDigits(lakh) + ' Lakh');
+      if (thousand) parts.push(threeDigits(thousand) + ' Thousand');
+      if (hundred) parts.push(threeDigits(hundred));
+      return parts.join(' ');
+    };
+    let result = 'Rupees ' + wordsFor(rupees);
+    if (paise > 0) result += ' and ' + twoDigits(paise) + ' Paise';
+    return result + ' Only';
+  },
 
   // Renders either the mapped rows, a clear error message (if the API call
   // failed), or an empty-state message — so a broken API call never looks
@@ -522,6 +551,7 @@ const SalesDispatchPage = {
         <td>${o.total_dispatched_qty}/${o.total_ordered_qty}</td><td>${SalesDispatchPage.fmt(o.grand_total)}</td>
         <td><span class="badge bg-info">${o.status}</span></td>
         <td>
+          <button class="btn btn-sm btn-outline-secondary" onclick="SOPrint.print(${o.id})"><i class="fas fa-print me-1"></i>Print</button>
           ${o.status === 'Draft' ? `<button class="btn btn-sm btn-outline-success" onclick="SalesDispatchPage.setOrderStatus(${o.id}, 'Confirmed')">Confirm</button>` : ''}
           <button class="btn btn-sm btn-outline-info" onclick="AvailabilityModal.show(${o.id})">Check Availability</button>
           ${['Draft', 'Confirmed'].includes(o.status) ? `<button class="btn btn-sm btn-outline-danger" onclick="SalesDispatchPage.setOrderStatus(${o.id}, 'Cancelled')">Cancel</button>` : ''}
@@ -569,6 +599,9 @@ const SalesDispatchPage = {
           ${c.invoice_id
             ? `<button class="btn btn-sm btn-outline-primary" onclick="InvoicePrint.print(${c.invoice_id})">Print Invoice</button>`
             : `<button class="btn btn-sm btn-outline-primary" onclick="SalesInvoiceModal.showForCustomer(${c.customer_id || 'null'})">Generate Invoice</button>`}
+          ${c.ewb_status === 'Generated'
+            ? `<span class="badge bg-success" title="Valid until ${c.ewb_valid_until ? new Date(c.ewb_valid_until).toLocaleString('en-IN') : '-'}">e-Way Bill: ${c.ewb_generated_number}</span>`
+            : `<button class="btn btn-sm btn-outline-warning" onclick="EWayBillActions.generate(${c.id})">Generate e-Way Bill</button>`}
         </td>
       </tr>
     `);
@@ -625,9 +658,38 @@ const SalesDispatchPage = {
         <td>
           <button class="btn btn-sm btn-outline-secondary" onclick="InvoicePrint.print(${i.id})">Print</button>
           ${i.status !== 'Paid' ? `<button class="btn btn-sm btn-outline-primary" onclick="PaymentModal.show(${i.id})">Record Payment</button>` : ''}
+          ${i.einvoice_status === 'Generated'
+            ? `<span class="badge bg-success" title="IRN: ${i.irn}">e-Invoice ✓</span>`
+            : `<button class="btn btn-sm btn-outline-warning" onclick="EInvoiceActions.generate(${i.id})">Generate e-Invoice</button>`}
         </td>
       </tr>
     `);
+  }
+};
+
+const EInvoiceActions = {
+  generate: async (invoiceId) => {
+    if (!confirm('Generate a real e-Invoice (IRN) for this invoice via your configured GSP? This reports it to the government.')) return;
+    const result = await API.generateEinvoice(invoiceId);
+    if (result && !result.error) {
+      alert(result.message || `e-Invoice generated — IRN: ${result.irn}`);
+      await SalesDispatchPage.loadInvoices();
+    } else {
+      alert('Error: ' + ((result && result.error) || 'Something went wrong'));
+    }
+  }
+};
+
+const EWayBillActions = {
+  generate: async (challanId) => {
+    if (!confirm('Generate a real e-Way Bill for this challan via your configured GSP? This reports it to the government.')) return;
+    const result = await API.generateEwaybill(challanId);
+    if (result && !result.error) {
+      alert(result.message || `e-Way Bill generated: ${result.ewb_number}`);
+      await SalesDispatchPage.loadChallans();
+    } else {
+      alert('Error: ' + ((result && result.error) || 'Something went wrong'));
+    }
   }
 };
 
@@ -904,6 +966,76 @@ const ChallanModal = {
   }
 };
 
+const SOPrint = {
+  print: async (id) => {
+    const so = await API.getSalesOrder(id);
+    if (!so || so.error) { alert('Could not load sales order'); return; }
+    const company = await API.getCompanySettings() || {};
+
+    const itemsHtml = (so.items || []).map((it, idx) => `
+      <tr>
+        <td>${idx + 1}</td>
+        <td>${it.material_name || ''}</td>
+        <td>${it.hsn_code || '-'}</td>
+        <td style="text-align:right">${it.quantity} ${it.unit_of_measure || it.material_unit || ''}</td>
+        <td style="text-align:right">${SalesDispatchPage.fmt(it.unit_price)}</td>
+        <td style="text-align:right">${it.tax_rate || 0}%</td>
+        <td style="text-align:right">${SalesDispatchPage.fmt(it.line_total)}</td>
+      </tr>
+    `).join('');
+
+    const printHtml = `
+      <!DOCTYPE html><html><head><title>${so.so_number}</title><meta charset="utf-8">
+      <style>
+        @page { size: A4; margin: 14mm; } body { font-family: Arial, Helvetica, sans-serif; color:#222; font-size:12px; }
+        h2 { color:#1a4d8f; margin-bottom:0; } h3 { margin: 6px 0 0; letter-spacing: 1px; }
+        table { width:100%; border-collapse: collapse; margin-top:10px; }
+        th, td { border:1px solid #ccc; padding:6px 7px; text-align:left; font-size:10.5px; } th { background:#f0f4fa; }
+        .meta { display:flex; justify-content:space-between; background:#f7f9fc; border:1px solid #ddd; padding:10px; margin:10px 0; gap: 10px; }
+        .meta > div { flex: 1; }
+        .totals { width: 340px; margin-left: auto; margin-top: 10px; }
+        .totals td { font-size: 11.5px; }
+        .grand { font-size: 14px; font-weight: bold; background: #f0f4fa; }
+        .sign { display:flex; justify-content:flex-end; margin-top:70px; } .sign div { border-top:1px solid #333; width:220px; text-align:center; padding-top:4px; }
+        .letterhead { display:flex; align-items:center; gap:14px; border-bottom:2px solid #1a4d8f; padding-bottom:8px; margin-bottom:6px; }
+        .letterhead img { height:60px; max-width:150px; object-fit:contain; }
+        .letterhead .company-info { flex:1; }
+      </style></head><body>
+        <div class="letterhead">
+          ${company.logo_data_url ? `<img src="${company.logo_data_url}" alt="Logo">` : ''}
+          <div class="company-info">
+            <h2>${company.company_name || 'Company'}</h2>
+            <div class="small text-muted">${[company.address, company.city, company.state, company.postal_code].filter(Boolean).join(', ')}</div>
+            <div class="small text-muted">${company.gstin ? 'GSTIN: ' + company.gstin : ''}${company.phone ? ' | Ph: ' + company.phone : ''}${company.email ? ' | ' + company.email : ''}</div>
+          </div>
+        </div>
+        <h3>SALES ORDER</h3>
+        <div class="meta">
+          <div><strong>SO No:</strong> ${so.so_number}<br><strong>Order Date:</strong> ${new Date(so.order_date).toLocaleDateString('en-IN')}<br><strong>Expected Delivery:</strong> ${so.expected_delivery_date ? new Date(so.expected_delivery_date).toLocaleDateString('en-IN') : '-'}</div>
+          <div><strong>Customer:</strong> ${so.customer_name}<br>${[so.customer_address, so.customer_city, so.customer_state].filter(Boolean).join(', ')}<br>${so.customer_gstin ? 'GSTIN: ' + so.customer_gstin : ''}</div>
+          <div><strong>Payment Term:</strong> ${so.payment_term || '-'}<br><strong>Transporter:</strong> ${so.transporter || '-'}<br><strong>Destination:</strong> ${so.destination || '-'}</div>
+        </div>
+        <table>
+          <thead><tr><th>#</th><th>Material</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Tax</th><th>Line Total</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        <table class="totals">
+          <tr><td>Taxable Value</td><td style="text-align:right">${SalesDispatchPage.fmt(so.total_amount)}</td></tr>
+          <tr><td>Tax</td><td style="text-align:right">${SalesDispatchPage.fmt(so.tax_amount)}</td></tr>
+          <tr class="grand"><td>Grand Total</td><td style="text-align:right">${SalesDispatchPage.fmt(so.grand_total)}</td></tr>
+        </table>
+        <div class="small mt-2"><strong>Amount in Words:</strong> ${SalesDispatchPage.amountInWords(so.grand_total)}</div>
+        ${so.special_remarks ? `<div class="small text-muted mt-2"><strong>Remarks:</strong> ${so.special_remarks}</div>` : ''}
+        <div class="small text-muted mt-2">This is a Sales Order for internal processing and customer confirmation — the GST tax invoice is issued separately at the time of billing.</div>
+        <div class="sign"><div>Authorized Signatory</div></div>
+        <script>window.onload = () => window.print();</script>
+      </body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { alert('Please allow pop-ups to print.'); return; }
+    w.document.write(printHtml); w.document.close();
+  }
+};
+
 const ChallanPrint = {
   print: async (id) => {
     const c = await API.getChallan(id);
@@ -925,7 +1057,7 @@ const ChallanPrint = {
         <div class="meta">
           <div><strong>Challan No:</strong> ${c.challan_number}<br><strong>Date:</strong> ${new Date(c.challan_date).toLocaleDateString('en-IN')}<br><strong>SO No:</strong> ${c.so_number || '-'}</div>
           <div><strong>Customer:</strong> ${c.customer_name}<br>${[c.customer_address, c.customer_city, c.customer_state].filter(Boolean).join(', ')}<br>${c.customer_gstin ? 'GSTIN: ' + c.customer_gstin : ''}</div>
-          <div><strong>Vehicle:</strong> ${c.vehicle_number || '-'}<br><strong>Transporter:</strong> ${c.transporter || '-'}<br><strong>E-Way Bill:</strong> ${c.eway_bill_number || '-'}</div>
+          <div><strong>Vehicle:</strong> ${c.vehicle_number || '-'}<br><strong>Transporter:</strong> ${c.transporter || '-'}<br><strong>E-Way Bill:</strong> ${c.ewb_generated_number || c.eway_bill_number || '-'}${c.ewb_valid_until ? '<br><strong>Valid Until:</strong> ' + new Date(c.ewb_valid_until).toLocaleString('en-IN') : ''}</div>
         </div>
         <table><thead><tr><th>#</th><th>Material</th><th>HSN</th><th>Qty</th><th>Batch</th></tr></thead><tbody>${itemsHtml}</tbody></table>
         <div class="sign"><div>Store / Dispatch</div><div>Driver / Transporter</div><div>Received By (Customer)</div></div>
@@ -980,15 +1112,33 @@ const InvoicePrint = {
         .totals td { font-size: 11.5px; }
         .grand { font-size: 14px; font-weight: bold; background: #f0f4fa; }
         .sign { display:flex; justify-content:flex-end; margin-top:70px; } .sign div { border-top:1px solid #333; width:220px; text-align:center; padding-top:4px; }
+        .letterhead { display:flex; align-items:center; gap:14px; border-bottom:2px solid #1a4d8f; padding-bottom:8px; margin-bottom:6px; }
+        .letterhead img { height:60px; max-width:150px; object-fit:contain; }
+        .letterhead .company-info { flex:1; }
+        .doc-title-row { display:flex; justify-content:space-between; align-items:baseline; }
       </style></head><body>
-        <h2>${company.company_name || 'Company'}</h2>
-        <div class="small text-muted">${[company.address, company.city, company.state, company.postal_code].filter(Boolean).join(', ')}${company.gstin ? ' | GSTIN: ' + company.gstin : ''}</div>
-        <h3>TAX INVOICE</h3>
+        <div class="letterhead">
+          ${company.logo_data_url ? `<img src="${company.logo_data_url}" alt="Logo">` : ''}
+          <div class="company-info">
+            <h2>${company.company_name || 'Company'}</h2>
+            <div class="small text-muted">${[company.address, company.city, company.state, company.postal_code].filter(Boolean).join(', ')}</div>
+            <div class="small text-muted">${company.gstin ? 'GSTIN: ' + company.gstin : ''}${company.phone ? ' | Ph: ' + company.phone : ''}${company.email ? ' | ' + company.email : ''}</div>
+          </div>
+        </div>
+        <div class="doc-title-row">
+          <h3>TAX INVOICE</h3>
+          <div class="small text-muted">Reverse Charge Applicable: No</div>
+        </div>
         <div class="meta">
           <div><strong>Invoice No:</strong> ${inv.invoice_number}<br><strong>Date:</strong> ${new Date(inv.invoice_date).toLocaleDateString('en-IN')}<br><strong>Due Date:</strong> ${inv.due_date ? new Date(inv.due_date).toLocaleDateString('en-IN') : '-'}</div>
           <div><strong>Bill To:</strong> ${inv.customer_name}<br>${[inv.customer_address, inv.customer_city, inv.customer_state].filter(Boolean).join(', ')}<br>${inv.customer_gstin ? 'GSTIN: ' + inv.customer_gstin : ''}</div>
           <div><strong>Place of Supply:</strong> ${inv.place_of_supply || '-'}<br><strong>Supply Type:</strong> ${interstate ? 'Inter-State (IGST)' : 'Intra-State (CGST+SGST)'}<br>${inv.external_reference ? '<strong>Ref:</strong> ' + inv.external_reference : ''}</div>
         </div>
+        ${inv.einvoice_status === 'Generated' ? `
+        <div class="meta" style="align-items:center">
+          <div><strong>IRN:</strong> <span style="font-size:9.5px; word-break:break-all;">${inv.irn}</span><br><strong>Ack No:</strong> ${inv.irn_ack_number || '-'} &nbsp; <strong>Ack Date:</strong> ${inv.irn_ack_date ? new Date(inv.irn_ack_date).toLocaleString('en-IN') : '-'}</div>
+          <div style="flex:0 0 100px; text-align:center;"><div id="einvoiceQr"></div></div>
+        </div>` : ''}
         <table>
           <thead><tr><th>#</th><th>Description (with Order Ref)</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Taxable Value</th>${taxHeaders}<th>Line Total</th></tr></thead>
           <tbody>${itemsHtml}</tbody>
@@ -1002,9 +1152,23 @@ const InvoicePrint = {
           <tr><td>Paid</td><td style="text-align:right">${SalesDispatchPage.fmt(inv.paid_amount)}</td></tr>
           <tr><td><strong>Balance Due</strong></td><td style="text-align:right"><strong>${SalesDispatchPage.fmt(inv.grand_total - inv.paid_amount)}</strong></td></tr>
         </table>
+        <div class="small mt-2"><strong>Amount in Words:</strong> ${SalesDispatchPage.amountInWords(inv.grand_total)}</div>
         ${inv.notes ? `<div class="small text-muted mt-2"><strong>Notes:</strong> ${inv.notes}</div>` : ''}
         <div class="sign"><div>Authorized Signatory</div></div>
-        <script>window.onload = () => window.print();</script>
+        ${inv.einvoice_status === 'Generated' && inv.irn_signed_qr ? `<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>` : ''}
+        <script>
+          window.onload = () => {
+            ${inv.einvoice_status === 'Generated' && inv.irn_signed_qr ? `
+            try {
+              new QRCode(document.getElementById('einvoiceQr'), {
+                text: ${JSON.stringify(inv.irn_signed_qr)},
+                width: 90, height: 90
+              });
+            } catch (e) { console.error('QR render failed', e); }
+            ` : ''}
+            window.print();
+          };
+        </script>
       </body></html>`;
     const w = window.open('', '_blank');
     if (!w) { alert('Please allow pop-ups to print.'); return; }

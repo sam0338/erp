@@ -180,8 +180,15 @@ const InvoiceModal = {
     const eligible = pos.filter(p => ['Approved', 'Partially Received', 'Received'].includes(p.status));
     const select = document.getElementById('invoicePOSelect');
     if (select) {
+      // BUG FIX: this used to carry the PO's grand_total (already
+      // tax-inclusive) into what loadPOInfo() treats as the PRE-TAX
+      // amount, with no tax figure carried at all — so every vendor
+      // invoice's Tax field silently stayed at 0 and got saved that way,
+      // which is exactly why Input Tax (Purchases) in GST Summary never
+      // added up to anything. Carrying the real pre-tax amount and tax
+      // amount separately, matching what the PO itself actually computed.
       select.innerHTML = '<option value="">Select PO</option>' + eligible.map(po =>
-        `<option value="${po.id}" data-vendor-id="${po.vendor_id}" data-vendor="${po.vendor_name}" data-amount="${po.grand_total}">${po.po_number} - ${po.vendor_name}</option>`
+        `<option value="${po.id}" data-vendor-id="${po.vendor_id}" data-vendor="${po.vendor_name}" data-amount="${po.total_amount}" data-tax="${po.tax_amount}">${po.po_number} - ${po.vendor_name}</option>`
       ).join('');
     }
   },
@@ -192,7 +199,8 @@ const InvoiceModal = {
     if (option.value) {
       document.getElementById('invoiceVendor').value = option.dataset.vendor;
       document.getElementById('invoiceVendorId').value = option.dataset.vendorId;
-      document.getElementById('invoiceAmount').value = parseFloat(option.dataset.amount);
+      document.getElementById('invoiceAmount').value = parseFloat(option.dataset.amount) || 0;
+      document.getElementById('invoiceTax').value = parseFloat(option.dataset.tax) || 0;
       InvoiceModal.calculateTotal();
     }
   },
