@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book Your Stay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  body { background: var(--paper); }
+  .bk-hero {
+    background: linear-gradient(160deg, var(--teal-900) 0%, #0A2C2B 100%);
+    color: #EAF3F1; padding: 44px 24px 90px; text-align: center;
+  }
+  .bk-hero h1 { font-family: var(--font-display); font-size: 30px; font-weight: 600; }
+  .bk-hero p { color: rgba(234,243,241,0.7); margin-top: 6px; font-size: 13.5px; }
+  .bk-wrap { max-width: 780px; margin: -60px auto 60px; padding: 0 20px; }
+  .search-card {
+    background: var(--paper-raised); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md); padding: 20px; display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end;
+  }
+  .search-card .form-field { margin-bottom: 0; flex: 1; min-width: 130px; }
+  .search-card .btn { height: 41px; }
+  .results { margin-top: 26px; }
+  .room-card {
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius-lg);
+    padding: 18px 20px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  }
+  .room-card .rname { font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--teal-900); }
+  .room-card .rdesc { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
+  .room-card .ravail { font-size: 11.5px; color: var(--ok); margin-top: 6px; font-weight: 600; }
+  .room-card .rprice { text-align: right; }
+  .room-card .rprice .amt { font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--teal-900); }
+  .room-card .rprice .per { font-size: 11px; color: var(--ink-soft); }
+  .empty { text-align: center; padding: 40px 20px; color: var(--ink-soft); }
+  .confirm-box {
+    background: var(--ok-bg); border-radius: var(--radius-lg); padding: 30px; text-align: center;
+  }
+  .confirm-box .ref { font-family: var(--font-mono); font-size: 20px; font-weight: 700; color: var(--ok); margin: 10px 0; }
+</style>
+</head>
+<body>
+  <div class="bk-hero">
+    <h1 id="propName">Book Your Stay</h1>
+    <p id="propAddress">Check availability and book directly</p>
+  </div>
+
+  <div class="bk-wrap">
+    <div class="search-card">
+      <div class="form-field">
+        <label>Arrival</label>
+        <input type="date" id="bkArrival">
+      </div>
+      <div class="form-field">
+        <label>Departure</label>
+        <input type="date" id="bkDeparture">
+      </div>
+      <div class="form-field" style="max-width:110px;">
+        <label>Adults</label>
+        <input type="number" id="bkAdults" value="1" min="1">
+      </div>
+      <button class="btn btn-primary" onclick="searchAvailability()">Search</button>
+    </div>
+
+    <div class="results" id="results"></div>
+  </div>
+
+  <div id="modalRoot"></div>
+  <div id="toast" class="toast"></div>
+
+<script>
+const params = new URLSearchParams(window.location.search);
+const propertyCode = params.get('code') || '';
+let currentSearch = null;
+
+function fmtMoney(n) { return '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function showToast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+async function loadProperty() {
+  try {
+    const url = propertyCode ? `/api/public/property?code=${encodeURIComponent(propertyCode)}` : '/api/public/property';
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const p = await res.json();
+    document.title = `Book Your Stay — ${p.name}`;
+    document.getElementById('propName').textContent = p.name;
+    document.getElementById('propAddress').textContent = [p.address, p.city].filter(Boolean).join(', ') || 'Check availability and book directly';
+  } catch (e) { /* ignore */ }
+}
+
+function defaultDates() {
+  const today = new Date();
+  const tomorrow = new Date(today.getTime() + 86400000);
+  document.getElementById('bkArrival').value = today.toISOString().slice(0, 10);
+  document.getElementById('bkDeparture').value = tomorrow.toISOString().slice(0, 10);
+}
+
+async function searchAvailability() {
+  const arrival = document.getElementById('bkArrival').value;
+  const departure = document.getElementById('bkDeparture').value;
+  const resultsEl = document.getElementById('results');
+
+  if (!arrival || !departure) { showToast('Pick both dates', true); return; }
+  if (departure <= arrival) { showToast('Departure must be after arrival', true); return; }
+
+  currentSearch = { arrival, departure };
+  resultsEl.innerHTML = '<div class="empty">Searching…</div>';
+
+  try {
+    const url = new URL('/api/public/availability', window.location.origin);
+    url.searchParams.set('arrival', arrival);
+    url.searchParams.set('departure', departure);
+    if (propertyCode) url.searchParams.set('code', propertyCode);
+
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) { resultsEl.innerHTML = `<div class="empty">${escapeHtml(data.error || 'Something went wrong')}</div>`; return; }
+
+    if (data.room_types.length === 0) {
+      resultsEl.innerHTML = '<div class="empty">No rooms available for these dates. Try different dates.</div>';
+      return;
+    }
+
+    resultsEl.innerHTML = data.room_types.map(t => `
+      <div class="room-card">
+        <div>
+          <div class="rname">${escapeHtml(t.name)}</div>
+          <div class="rdesc">${escapeHtml(t.description || '')}${t.max_occupancy ? ' · Up to ' + t.max_occupancy + ' guests' : ''}</div>
+          <div class="ravail">${t.available_count} room${t.available_count > 1 ? 's' : ''} left</div>
+        </div>
+        <div class="rprice">
+          <div class="amt">${fmtMoney(t.rate_per_night)}</div>
+          <div class="per">per night · ${fmtMoney(t.total_for_stay)} total</div>
+          <button class="btn btn-brass btn-sm" style="margin-top:8px;" onclick="openBookingForm(${t.room_type_id}, '${escapeHtml(t.name)}', ${t.rate_per_night})">Book Now</button>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    resultsEl.innerHTML = '<div class="empty">Could not load availability. Please try again.</div>';
+  }
+}
+
+function openBookingForm(roomTypeId, roomTypeName, ratePerNight) {
+  showModal(`Book ${roomTypeName}`, `
+    <p class="muted" style="font-size:13px;margin-bottom:14px;">${fmtDate(currentSearch.arrival)} – ${fmtDate(currentSearch.departure)} · ${fmtMoney(ratePerNight)}/night</p>
+    <div class="form-grid">
+      <div class="form-field span-2"><label>Full Name *</label><input id="g_name" type="text" required></div>
+      <div class="form-field"><label>Phone *</label><input id="g_phone" type="text" required></div>
+      <div class="form-field"><label>Email</label><input id="g_email" type="email"></div>
+      <div class="form-field span-2"><label>Address</label><input id="g_address" type="text"></div>
+      <div class="form-field"><label>City</label><input id="g_city" type="text"></div>
+      <div class="form-field"><label>State</label><input id="g_state" type="text"></div>
+    </div>
+  `, [
+    { label: 'Cancel', cls: 'btn-outline', action: closeModal },
+    { label: 'Confirm Booking', cls: 'btn-primary', action: () => submitBooking(roomTypeId) }
+  ]);
+}
+
+async function submitBooking(roomTypeId) {
+  const name = document.getElementById('g_name').value.trim();
+  const phone = document.getElementById('g_phone').value.trim();
+  if (!name || !phone) { showToast('Name and phone are required', true); return; }
+
+  const payload = {
+    code: propertyCode || undefined,
+    arrival_date: currentSearch.arrival,
+    departure_date: currentSearch.departure,
+    room_type_id: roomTypeId,
+    guest: {
+      full_name: name, phone,
+      email: document.getElementById('g_email').value.trim(),
+      address: document.getElementById('g_address').value.trim(),
+      city: document.getElementById('g_city').value.trim(),
+      state: document.getElementById('g_state').value.trim()
+    }
+  };
+
+  try {
+    const res = await fetch('/api/public/booking', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Booking failed', true); return; }
+
+    showModal('Booking Confirmed', `
+      <div class="confirm-box">
+        <div style="font-size:15px;">Your booking is confirmed!</div>
+        <div class="ref">${escapeHtml(data.booking_ref)}</div>
+        <div class="muted" style="font-size:12.5px;">Please keep this reference for check-in.</div>
+      </div>
+    `, [{ label: 'Done', cls: 'btn-primary', action: () => { closeModal(); searchAvailability(); } }]);
+  } catch (e) {
+    showToast('Could not submit booking. Please try again.', true);
+  }
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function showModal(title, bodyHtml, buttons) {
+  const footer = (buttons || []).map((b, i) => `<button class="btn ${b.cls}" data-btn-idx="${i}">${escapeHtml(b.label)}</button>`).join('');
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal">
+        <div class="modal-header"><h3>${escapeHtml(title)}</h3><span class="modal-close" onclick="closeModal()">&times;</span></div>
+        <div class="modal-body">${bodyHtml}</div>
+        ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+      </div>
+    </div>`;
+  document.getElementById('modalOverlay').addEventListener('click', (e) => { if (e.target.id === 'modalOverlay') closeModal(); });
+  (buttons || []).forEach((b, i) => {
+    const el = document.querySelector(`[data-btn-idx="${i}"]`);
+    if (el) el.addEventListener('click', b.action);
+  });
+}
+function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
+
+loadProperty();
+defaultDates();
+searchAvailability();
+</script>
+</body>
+</html>

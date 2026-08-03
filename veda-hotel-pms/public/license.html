@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>License Required — VEDA Hotel PMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  body { background: var(--teal-900); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .lic-card { background: var(--paper-raised); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); max-width: 480px; width: 100%; padding: 36px 34px; }
+  .lic-badge { width: 52px; height: 52px; border-radius: 50%; background: var(--teal-900); color: var(--brass-light); display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 24px; font-weight: 700; margin: 0 auto 18px; border: 2px solid var(--brass); }
+  .lic-card h1 { font-family: var(--font-display); font-size: 21px; font-weight: 600; text-align: center; color: var(--teal-900); margin-bottom: 6px; }
+  .lic-card p.sub { text-align: center; color: var(--ink-soft); font-size: 13px; margin-bottom: 22px; }
+  .lic-status { padding: 12px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 20px; }
+  .lic-status.trial { background: var(--warn-bg); color: var(--warn); }
+  .lic-status.expired { background: var(--danger-bg); color: var(--danger); }
+  .fingerprint-box { background: var(--teal-100); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 20px; }
+  .fingerprint-box .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-soft); font-weight: 600; margin-bottom: 4px; }
+  .fingerprint-box .value { font-family: var(--font-mono); font-size: 13px; word-break: break-all; }
+  .lic-error { display: none; background: var(--danger-bg); color: var(--danger); padding: 10px 12px; border-radius: var(--radius); font-size: 12.5px; margin-bottom: 14px; }
+  .lic-success { display: none; background: var(--ok-bg); color: var(--ok); padding: 14px; border-radius: var(--radius); font-size: 13.5px; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="lic-card">
+    <div class="lic-badge">V</div>
+    <h1>License Required</h1>
+    <p class="sub">VEDA Hotel PMS</p>
+
+    <div id="statusBox"></div>
+
+    <div id="activationForm">
+      <div class="fingerprint-box">
+        <div class="label">Installation ID</div>
+        <div class="value" id="fingerprintValue">Loading…</div>
+      </div>
+      <p class="muted" style="font-size:12.5px;margin-bottom:16px;">Send this installation ID to your vendor to receive a license key for this machine.</p>
+
+      <div class="lic-error" id="licError"></div>
+      <div class="form-field">
+        <label>License Key</label>
+        <textarea id="licenseKeyInput" rows="3" placeholder="Paste your license key here"></textarea>
+      </div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="activate()">Activate License</button>
+    </div>
+
+    <div class="lic-success" id="licSuccess"></div>
+  </div>
+
+<script>
+async function loadStatus() {
+  try {
+    const res = await fetch('/api/license/status');
+    const status = await res.json();
+    document.getElementById('fingerprintValue').textContent = status.fingerprint;
+
+    const statusBox = document.getElementById('statusBox');
+    if (status.licensed) {
+      statusBox.innerHTML = `<div class="lic-status" style="background:var(--ok-bg);color:var(--ok);">Licensed to ${status.licensedTo || 'this installation'}${status.validUntil ? ' — valid until ' + status.validUntil : ' (perpetual)'}.</div>`;
+    } else if (status.inTrial) {
+      statusBox.innerHTML = `<div class="lic-status trial">Trial active — ${status.trialDaysRemaining} day${status.trialDaysRemaining === 1 ? '' : 's'} remaining.</div>`;
+    } else {
+      statusBox.innerHTML = `<div class="lic-status expired">Your 7-day trial has ended${status.licenseError ? ': ' + status.licenseError : ''}. Activate a license to continue.</div>`;
+    }
+
+    if (status.active) {
+      setTimeout(() => { window.location.href = '/'; }, 800);
+    }
+  } catch (e) {
+    document.getElementById('fingerprintValue').textContent = 'Could not load';
+  }
+}
+
+async function activate() {
+  const key = document.getElementById('licenseKeyInput').value.trim();
+  const errorBox = document.getElementById('licError');
+  errorBox.style.display = 'none';
+  if (!key) { errorBox.textContent = 'Please paste your license key'; errorBox.style.display = 'block'; return; }
+
+  try {
+    const res = await fetch('/api/license/activate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ license_key: key })
+    });
+    const data = await res.json();
+    if (!res.ok) { errorBox.textContent = data.error || 'Activation failed'; errorBox.style.display = 'block'; return; }
+
+    document.getElementById('activationForm').style.display = 'none';
+    const successBox = document.getElementById('licSuccess');
+    successBox.style.display = 'block';
+    successBox.textContent = `License activated${data.licensedTo ? ' for ' + data.licensedTo : ''}. Redirecting…`;
+    setTimeout(() => { window.location.href = '/'; }, 1200);
+  } catch (e) {
+    errorBox.textContent = 'Could not reach server. Please try again.';
+    errorBox.style.display = 'block';
+  }
+}
+
+loadStatus();
+</script>
+</body>
+</html>

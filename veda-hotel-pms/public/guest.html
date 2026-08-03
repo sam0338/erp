@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Stay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  body { background: var(--paper); }
+  .gp-hero { background: linear-gradient(160deg, var(--teal-900) 0%, #0A2C2B 100%); color: #EAF3F1; padding: 40px 24px; text-align: center; }
+  .gp-hero h1 { font-family: var(--font-display); font-size: 26px; font-weight: 600; }
+  .gp-wrap { max-width: 560px; margin: 0 auto; padding: 24px 20px 60px; }
+  .lookup-card { background: var(--paper-raised); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); padding: 24px; margin-top: -20px; }
+  .stay-card { background: var(--paper-raised); border-radius: var(--radius-lg); border: 1px solid var(--line); padding: 20px; margin-bottom: 16px; }
+  .action-btn { width: 100%; text-align: left; padding: 14px 16px; margin-bottom: 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--paper-raised); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .action-btn:hover { border-color: var(--teal-500); background: var(--teal-100); }
+</style>
+</head>
+<body>
+  <div class="gp-hero"><h1>My Stay</h1></div>
+  <div class="gp-wrap">
+    <div class="lookup-card" id="lookupCard">
+      <div class="form-field"><label>Booking Reference</label><input id="lk_ref" type="text" placeholder="RES-2026-00001"></div>
+      <div class="form-field"><label>Phone Number</label><input id="lk_phone" type="text" placeholder="Your registered phone number"></div>
+      <button class="btn btn-primary" style="width:100%;justify-content:center;" onclick="lookupStay()">View My Stay</button>
+    </div>
+    <div id="stayContent"></div>
+  </div>
+  <div id="modalRoot"></div>
+  <div id="toast" class="toast"></div>
+
+<script>
+let currentBooking = null;
+
+const gpParams = new URLSearchParams(window.location.search);
+window.addEventListener('DOMContentLoaded', () => {
+  if (gpParams.get('ref')) document.getElementById('lk_ref').value = gpParams.get('ref');
+});
+
+function escapeHtml(str) { if (str === null || str === undefined) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function fmtMoney(n) { return '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtDate(d) { if (!d) return '—'; return new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }); }
+function showToast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => el.classList.remove('show'), 3200);
+}
+
+async function lookupStay() {
+  const booking_ref = document.getElementById('lk_ref').value.trim();
+  const phone = document.getElementById('lk_phone').value.trim();
+  if (!booking_ref || !phone) { showToast('Enter both booking reference and phone', true); return; }
+
+  try {
+    const res = await fetch('/api/public/guest-lookup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ booking_ref, phone })
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Not found', true); return; }
+
+    currentBooking = { booking_ref, phone };
+    document.getElementById('lookupCard').style.display = 'none';
+
+    const rooms = data.rooms.map(r => `${escapeHtml(r.room_type_name)}${r.room_number ? ' · Room ' + escapeHtml(r.room_number) : ''}`).join(', ');
+
+    document.getElementById('stayContent').innerHTML = `
+      <div class="stay-card">
+        <div style="font-family:var(--font-display);font-size:18px;font-weight:600;">${escapeHtml(data.guest_name)}</div>
+        <div class="muted" style="font-size:13px;margin-top:4px;">${fmtDate(data.arrival_date)} – ${fmtDate(data.departure_date)} · ${escapeHtml(rooms)}</div>
+        <div class="muted" style="font-size:13px;margin-top:8px;">Balance: <strong style="color:${data.balance > 0.5 ? 'var(--danger)' : 'var(--ok)'};">${fmtMoney(data.balance)}</strong></div>
+      </div>
+
+      <button class="action-btn" onclick="openRequestModal('housekeeping')">🧹 Request Housekeeping</button>
+      <button class="action-btn" onclick="openRequestModal('food')">🍽️ Order Food</button>
+      <button class="action-btn" onclick="openRequestModal('laundry')">👕 Request Laundry</button>
+      <button class="action-btn" onclick="openRequestModal('extend_stay')">📅 Request to Extend Stay</button>
+      <button class="action-btn" onclick="downloadInvoice()">🧾 Download Invoice</button>
+    `;
+  } catch (e) {
+    showToast('Could not connect. Please try again.', true);
+  }
+}
+
+function openRequestModal(type) {
+  const labels = { housekeeping: 'Request Housekeeping', food: 'Order Food', laundry: 'Request Laundry', extend_stay: 'Request to Extend Stay' };
+  const placeholders = {
+    housekeeping: 'e.g. Please clean the room around 3pm',
+    food: 'e.g. 2 club sandwiches and a coffee to Room 204',
+    laundry: 'e.g. 3 shirts and 2 trousers, need by tomorrow morning',
+    extend_stay: 'e.g. Would like to extend to Aug 5th'
+  };
+  showModal(labels[type] || 'Request', `
+    <div class="form-field"><label>Details</label><textarea id="req_details" rows="3" placeholder="${placeholders[type] || ''}"></textarea></div>
+  `, [
+    { label: 'Cancel', cls: 'btn-outline', action: closeModal },
+    { label: 'Send Request', cls: 'btn-primary', action: async () => {
+      const details = document.getElementById('req_details').value.trim();
+      try {
+        const res = await fetch('/api/public/service-request', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...currentBooking, request_type: type, details })
+        });
+        const data = await res.json();
+        if (!res.ok) { showToast(data.error || 'Could not send request', true); return; }
+        closeModal();
+        showToast('Request sent — the front desk will follow up shortly');
+      } catch (e) { showToast('Could not send request', true); }
+    }}
+  ]);
+}
+
+async function downloadInvoice() {
+  try {
+    const res = await fetch('/api/public/invoice', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(currentBooking)
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || 'Could not load invoice', true); return; }
+
+    const win = window.open('', '_blank');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoice</title>
+      <style>body{font-family:Arial,sans-serif;padding:30px;max-width:600px;margin:0 auto;} table{width:100%;border-collapse:collapse;margin:16px 0;} td,th{padding:8px;border-bottom:1px solid #eee;text-align:left;} .tot{font-weight:700;font-size:16px;}</style>
+      </head><body>
+      <h2>${escapeHtml(data.property.name)}</h2>
+      <div>${escapeHtml(data.property.address || '')}, ${escapeHtml(data.property.city || '')}</div>
+      <hr>
+      <div>Booking: ${escapeHtml(data.reservation.booking_ref)} · Folio: ${escapeHtml(data.folio_number)}</div>
+      <div>${fmtDate(data.reservation.arrival_date)} – ${fmtDate(data.reservation.departure_date)}</div>
+      <table><thead><tr><th>Description</th><th style="text-align:right;">Amount</th></tr></thead><tbody>
+        ${data.charges.map(c => `<tr><td>${escapeHtml(c.description || c.charge_type)}</td><td style="text-align:right;">${fmtMoney(c.amount + c.tax_amount)}</td></tr>`).join('')}
+      </tbody></table>
+      <div class="tot">Total: ${fmtMoney(data.summary.grand_total)}</div>
+      <div>Paid: ${fmtMoney(data.summary.paid)}</div>
+      <div class="tot">Balance: ${fmtMoney(data.summary.balance)}</div>
+      <script>window.print();<\/script>
+      </body></html>`);
+    win.document.close();
+  } catch (e) { showToast('Could not load invoice', true); }
+}
+
+function showModal(title, bodyHtml, buttons) {
+  const footer = (buttons || []).map((b, i) => `<button class="btn ${b.cls}" data-btn-idx="${i}">${escapeHtml(b.label)}</button>`).join('');
+  document.getElementById('modalRoot').innerHTML = `
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal">
+        <div class="modal-header"><h3>${escapeHtml(title)}</h3><span class="modal-close" onclick="closeModal()">&times;</span></div>
+        <div class="modal-body">${bodyHtml}</div>
+        ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+      </div>
+    </div>`;
+  document.getElementById('modalOverlay').addEventListener('click', (e) => { if (e.target.id === 'modalOverlay') closeModal(); });
+  (buttons || []).forEach((b, i) => {
+    const el = document.querySelector(`[data-btn-idx="${i}"]`);
+    if (el) el.addEventListener('click', b.action);
+  });
+}
+function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
+</script>
+</body>
+</html>
