@@ -7,3 +7,12 @@ packaging/node/
 packaging/app/
 packaging/*.exe
 .DS_Store
+
+# VEDA Hotel PMS
+veda-hotel-pms/db/*.db
+veda-hotel-pms/db/*.db-journal
+veda-hotel-pms/.env
+veda-hotel-pms/license-tool/license_private.pem
+veda-hotel-pms/packaging/node/
+veda-hotel-pms/packaging/app/
+veda-hotel-pms/packaging/*.exe
