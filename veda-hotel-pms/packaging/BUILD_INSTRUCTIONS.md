@@ -92,6 +92,7 @@ packaging/
   Launch-VedaHotelPMS.vbs
   Stop-VedaHotelPMS.vbs
   installer.nsi
+  app-icon.ico           <- already committed to the repo, nothing to add
 ```
 
 ## Step 3 — Compile the installer

@@ -17,6 +17,7 @@
 ;                                 NOT license-tool/ — that never ships.
 ;   packaging/Launch-VedaHotelPMS.vbs
 ;   packaging/Stop-VedaHotelPMS.vbs
+;   packaging/app-icon.ico   <- installer/app/shortcut icon (VEDA logo)
 ; ============================================================
 
 !define APPNAME "VEDA Hotel PMS"
@@ -28,8 +29,13 @@ OutFile "VedaHotelPMSSetup.exe"
 InstallDir "$PROGRAMFILES64\${APPNAME}"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
+Icon "app-icon.ico"
+UninstallIcon "app-icon.ico"
 
 !include "MUI2.nsh"
+
+!define MUI_ICON "app-icon.ico"
+!define MUI_UNICON "app-icon.ico"
 
 !define MUI_ABORTWARNING
 !insertmacro MUI_PAGE_WELCOME
@@ -51,12 +57,13 @@ Section "VEDA Hotel PMS (required)" SecCore
   File /r "app"
   File "Launch-VedaHotelPMS.vbs"
   File "Stop-VedaHotelPMS.vbs"
+  File "app-icon.ico"
 
   CreateDirectory "$SMPROGRAMS\${APPNAME}"
-  CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "wscript.exe" '"$INSTDIR\Launch-VedaHotelPMS.vbs"'
-  CreateShortcut "$SMPROGRAMS\${APPNAME}\Stop ${APPNAME}.lnk" "wscript.exe" '"$INSTDIR\Stop-VedaHotelPMS.vbs"'
+  CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "wscript.exe" '"$INSTDIR\Launch-VedaHotelPMS.vbs"' "$INSTDIR\app-icon.ico" 0
+  CreateShortcut "$SMPROGRAMS\${APPNAME}\Stop ${APPNAME}.lnk" "wscript.exe" '"$INSTDIR\Stop-VedaHotelPMS.vbs"' "$INSTDIR\app-icon.ico" 0
   CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" "$INSTDIR\uninstall.exe"
-  CreateShortcut "$DESKTOP\${APPNAME}.lnk" "wscript.exe" '"$INSTDIR\Launch-VedaHotelPMS.vbs"'
+  CreateShortcut "$DESKTOP\${APPNAME}.lnk" "wscript.exe" '"$INSTDIR\Launch-VedaHotelPMS.vbs"' "$INSTDIR\app-icon.ico" 0
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
@@ -67,7 +74,7 @@ SectionEnd
 
 ; ---------- Optional: auto-start with Windows ----------
 Section "Start automatically when Windows starts" SecAutostart
-  CreateShortcut "$SMSTARTUP\${APPNAME}.lnk" "wscript.exe" '"$INSTDIR\Launch-VedaHotelPMS.vbs"'
+  CreateShortcut "$SMSTARTUP\${APPNAME}.lnk" "wscript.exe" '"$INSTDIR\Launch-VedaHotelPMS.vbs"' "$INSTDIR\app-icon.ico" 0
 SectionEnd
 
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
