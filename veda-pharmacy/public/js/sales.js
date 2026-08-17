@@ -233,7 +233,7 @@ function renderCart() {
       <tr>
         <td>
           ${escapeHtml(line.name)}
-          ${RX_SCHEDULES.includes(line.schedule) ? '<span class="badge badge-warn" style="margin-left:6px;">Rx</span>' : ''}
+          ${RX_SCHEDULES.includes(line.schedule) ? '<span class="badge badge-amber" style="margin-left:6px;">Rx</span>' : ''}
         </td>
         <td class="muted" style="font-size:12px;">${line.previewStock} ${escapeHtml(line.unit)}</td>
         <td><input type="number" min="1" value="${line.quantity}" data-idx="${idx}" class="cart-qty"></td>
@@ -545,7 +545,7 @@ async function openHistoryDetail(id) {
                   <td>${fmtMoney(l.sale_rate)}</td>
                   <td>${l.gst_rate}%</td>
                   <td>${fmtMoney(l.line_total)}</td>
-                  ${canReturn ? `<td>${remaining > 0 ? `<input type="number" min="0" max="${remaining}" value="0" data-sale-item-id="${l.id}" class="return-qty-input" style="width:56px;padding:5px 6px;border:1px solid var(--line);border-radius:5px;">` : '<span class="muted">—</span>'}</td>` : ''}
+                  ${canReturn ? `<td>${remaining > 0 ? `<input type="number" min="0" max="${remaining}" value="0" data-sale-item-id="${l.id}" class="return-qty-input" style="width:56px;padding:5px 6px;border:1px solid var(--border);border-radius:5px;">` : '<span class="muted">—</span>'}</td>` : ''}
                 </tr>
               `;
               }).join('')}

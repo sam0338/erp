@@ -11,7 +11,7 @@
 <style>
   html, body { height: 100%; }
   body {
-    background: #08301F;
+    background: var(--navy);
     display: flex; align-items: center; justify-content: center;
     padding: 28px;
   }
@@ -29,7 +29,7 @@
   /* ---------- Left brand panel ---------- */
   .login-visual {
     position: relative;
-    background: linear-gradient(155deg, var(--brand-700) 0%, var(--brand-900) 60%, #082116 100%);
+    background: linear-gradient(155deg, var(--teal-dark) 0%, var(--navy) 60%, #0a0f1c 100%);
     color: #EAF3EC;
     display: flex; flex-direction: column; justify-content: space-between;
     padding: 40px 42px 34px;
@@ -41,7 +41,7 @@
 
   .visual-top, .visual-mid, .visual-bottom { position: relative; z-index: 2; }
   .brand-row { display: flex; align-items: baseline; gap: 6px; }
-  .brand-wordmark { font-family: 'Manrope', sans-serif; font-weight: 800; font-size: 30px; letter-spacing: 0.01em; color: #fff; line-height: 1; }
+  .brand-wordmark { font-family: var(--font); font-weight: 800; font-size: 30px; letter-spacing: 0.01em; color: #fff; line-height: 1; }
   .brand-sub { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.3em; color: var(--accent-light); margin-top: 8px; text-transform: uppercase; }
   .brand-divider { width: 120px; height: 1px; background: rgba(200,127,23,0.4); margin: 14px 0; }
 

@@ -61,40 +61,49 @@
     </div>
   </div>
   <div class="page-content">
-    <div class="page-header">
-      <div>
-        <h1>Stores</h1>
-        <div class="sub">Every branch this install operates — switch between them from the sidebar.</div>
+    <div class="section-header">
+      <div class="section-title">Stores</div>
+      <button class="btn btn-primary" id="addStoreBtn">➕ Add Store</button>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Every branch this install operates — switch between them from the sidebar.</p>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-body">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--slate);white-space:nowrap;">
+          <input type="checkbox" id="includeInactive" style="width:auto;"> Show inactive
+        </label>
       </div>
-      <button class="btn btn-primary" id="addStoreBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-        Add Store
-      </button>
     </div>
 
-    <div class="search-bar">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);white-space:nowrap;">
-        <input type="checkbox" id="includeInactive"> Show inactive
-      </label>
-    </div>
-
-    <div class="card" style="padding:0;overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>Store</th>
-            <th>Code</th>
-            <th>City / State</th>
-            <th>GSTIN</th>
-            <th>Drug License</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="storesTbody">
-          <tr><td colspan="7" class="empty-state">Loading stores…</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🏬 Branches</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Store</th>
+              <th>Code</th>
+              <th>City / State</th>
+              <th>GSTIN</th>
+              <th>Drug License</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="storesTbody">
+            <tr><td colspan="7" class="empty-state">Loading stores…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="storesEmpty" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-icon">🏬</div>
+          <h3>No stores yet</h3>
+          <p>Add your first branch to get started.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>

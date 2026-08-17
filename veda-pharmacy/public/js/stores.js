@@ -30,25 +30,28 @@ async function loadStores() {
 
 function renderTable(stores) {
   const tbody = document.getElementById('storesTbody');
+  const emptyState = document.getElementById('storesEmpty');
   if (stores.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No stores found.</td></tr>';
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
 
   tbody.innerHTML = stores.map(s => `
     <tr${s.is_active ? '' : ' style="opacity:0.55;"'}>
       <td>
         <strong>${escapeHtml(s.name)}</strong>
-        ${s.id === currentUser.storeId ? '<span class="badge badge-info" style="margin-left:6px;">Current</span>' : ''}
+        ${s.id === currentUser.storeId ? '<span class="badge badge-blue" style="margin-left:6px;">Current</span>' : ''}
       </td>
       <td class="mono">${escapeHtml(s.code)}</td>
       <td>${escapeHtml(s.city || '—')}${s.state ? ', ' + escapeHtml(s.state) : ''}</td>
       <td class="mono">${escapeHtml(s.gstin || '—')}</td>
       <td class="mono">${escapeHtml(s.drug_license_no || '—')}</td>
-      <td>${s.is_active ? '<span class="badge badge-ok">Active</span>' : '<span class="badge badge-neutral">Inactive</span>'}</td>
+      <td>${s.is_active ? '<span class="badge badge-green">Active</span>' : '<span class="badge badge-slate">Inactive</span>'}</td>
       <td style="white-space:nowrap;">
-        ${s.is_active && s.id !== currentUser.storeId ? `<button class="btn btn-outline btn-sm" onclick="handleSwitch(${s.id})">Switch to</button>` : ''}
-        <button class="btn btn-outline btn-sm" onclick="openModal(${s.id})">Edit</button>
+        ${s.is_active && s.id !== currentUser.storeId ? `<button class="btn btn-secondary btn-sm" onclick="handleSwitch(${s.id})">Switch to</button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="openModal(${s.id})">Edit</button>
         ${s.is_active ? `<button class="btn btn-danger-outline btn-sm" onclick="handleDelete(${s.id})">Remove</button>` : ''}
       </td>
     </tr>
