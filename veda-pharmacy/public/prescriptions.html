@@ -3,25 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Purchases / GRN — VEDA Pharmacy</title>
+<title>Prescriptions — VEDA Pharmacy</title>
 <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
 <style>
-  .line-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .line-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); padding: 6px 6px; border-bottom: 1px solid var(--line); }
-  .line-table td { padding: 5px 6px; vertical-align: top; }
-  .line-table input, .line-table select { width: 100%; padding: 6px 7px; border: 1px solid var(--line); border-radius: 5px; font-size: 12.5px; }
-  .line-table .line-readout { font-size: 12.5px; padding: 6px 2px; white-space: nowrap; }
-  .line-table .rm-row-btn { background: none; border: none; color: var(--danger); font-size: 16px; line-height: 1; padding: 4px; }
-  .grn-totals { display: flex; justify-content: flex-end; }
-  .grn-totals table { border-collapse: collapse; }
-  .grn-totals td { padding: 4px 10px; font-size: 13px; }
-  .grn-totals td:first-child { color: var(--ink-soft); text-align: right; }
-  .grn-totals td:last-child { text-align: right; font-family: var(--font-mono); min-width: 100px; }
-  .grn-totals tr.grand td { font-weight: 800; font-size: 14.5px; color: var(--brand-900); border-top: 1px solid var(--line); padding-top: 8px; }
-  .grn-modal .modal { max-width: 900px; }
+  .rx-photo-box {
+    width: 100%; max-width: 320px; border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--paper); display: flex; align-items: center; justify-content: center;
+    overflow: hidden; margin-bottom: 10px;
+  }
+  .rx-photo-box img { width: 100%; height: auto; display: block; }
+  .rx-photo-box.empty { height: 140px; color: var(--ink-soft); font-size: 12.5px; }
 </style>
 </head>
 <body>
@@ -70,41 +64,32 @@
   <main class="main">
     <div class="page-header">
       <div>
-        <h1>Purchases / GRN</h1>
-        <div class="sub">Receiving stock from a distributor creates a batch for every line automatically.</div>
+        <h1>Prescriptions</h1>
+        <div class="sub">Every Schedule H1/X sale, with the patient/doctor record captured at checkout.</div>
       </div>
-      <button class="btn btn-primary" id="newGrnBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-        New GRN
-      </button>
     </div>
 
     <div class="search-bar">
-      <select id="distributorFilter"><option value="">All Distributors</option></select>
-      <select id="paymentStatusFilter">
-        <option value="">All Payment Status</option>
-        <option value="Unpaid">Unpaid</option>
-        <option value="Partial">Partial</option>
-        <option value="Paid">Paid</option>
-      </select>
+      <input type="search" id="searchInput" placeholder="Search by patient name, doctor name or Rx ref no…">
+      <input type="date" id="fromDate" title="From date">
+      <input type="date" id="toDate" title="To date">
     </div>
 
     <div class="card" style="padding:0;overflow-x:auto;">
       <table>
         <thead>
           <tr>
-            <th>GRN No.</th>
-            <th>Distributor</th>
-            <th>Invoice No.</th>
-            <th>Invoice Date</th>
-            <th>Items</th>
-            <th>Total</th>
-            <th>Payment</th>
+            <th>Date</th>
+            <th>Patient</th>
+            <th>Doctor</th>
+            <th>Rx Ref</th>
+            <th>Sale Invoice</th>
+            <th>Photo</th>
             <th></th>
           </tr>
         </thead>
-        <tbody id="purchasesTbody">
-          <tr><td colspan="8" class="empty-state">Loading purchases…</td></tr>
+        <tbody id="prescriptionsTbody">
+          <tr><td colspan="7" class="empty-state">Loading prescriptions…</td></tr>
         </tbody>
       </table>
     </div>
@@ -116,6 +101,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/shell.js"></script>
-<script src="/js/purchases.js"></script>
+<script src="/js/prescriptions.js"></script>
 </body>
 </html>

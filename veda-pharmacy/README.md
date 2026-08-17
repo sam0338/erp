@@ -5,15 +5,14 @@ India — Node.js + Express + better-sqlite3 + plain HTML/JS frontend, no
 build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
-**Status: core loop is complete.** Item Master, Distributors, Purchases/GRN,
-Batches & Stock, and POS/Sales are all live — a GRN creates batches, the
-POS screen sells against them FEFO (oldest expiry first, splitting across
-lots automatically), and a sale with a Schedule H1/X item is blocked until
-a prescription (patient + doctor name, at minimum) is captured. What's left
-is a standalone Prescriptions register/search view (the data already gets
-captured inline at the point of sale — see "Architecture decisions"),
-photo upload for the Rx slip, reports, and a distributor ledger view — see
-"What's next" below.
+**Status: every table in the original schema now has a screen.** Item
+Master, Distributors, Purchases/GRN, Batches & Stock, POS/Sales, and
+Prescriptions are all live — a GRN creates batches, POS sells against them
+FEFO (oldest expiry first, splitting across lots automatically), a sale
+with a Schedule H1/X item is blocked until a prescription is captured, and
+that prescription — plus a photo of the physical Rx slip — is searchable
+in its own register. What's left is reporting, a distributor ledger view,
+and partial-line sale returns — see "What's next" below.
 
 ## Quick start
 
@@ -41,9 +40,14 @@ the schema in ways that are painful to change later:
   `prescriptions` row (patient name, doctor name, Rx reference/date) and
   can optionally carry a photo of the physical Rx slip (`image_path`,
   uploaded via `multer`) for compliance. One prescription covers every
-  H1/X line on a single sale. The photo upload itself isn't wired up yet
-  (see "What's next") — today `POST /api/sales` creates the text-only
-  prescription row inline when the cart requires one.
+  H1/X line on a single sale. `POST /api/sales` creates the text-only
+  record inline at checkout; the photo is a separate step afterwards from
+  the Prescriptions register (`POST /api/prescriptions/:id/photo`), since
+  a cashier mid-sale shouldn't be blocked on finding the physical slip to
+  scan. Photos are **not** served as static files under `/public` —
+  `GET /api/prescriptions/:id/photo` streams them from disk behind the
+  same session auth as the rest of the API, so patient/doctor photos never
+  sit at a guessable, unauthenticated URL.
 - **MRP is GST-inclusive at the POS counter — deliberately different math
   from purchases.** Indian pharma MRP already includes tax, so a sale line
   back-calculates taxable value and GST out of `qty × rate` (`tax = gross ×
@@ -73,7 +77,7 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction |
 | `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP — viewable/searchable live, with expiry status (expired/near/ok) computed per row |
 | `sales`, `sale_items` | POS invoices — live; each line records the exact FEFO-selected `batch_id` it was sold from, split across lots automatically if one lot doesn't cover the quantity |
-| `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales — text capture live (created inline by `POST /api/sales`), photo upload not wired up yet |
+| `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales — live end to end: text created inline by `POST /api/sales`, photo attached/replaced afterwards from the register, both searchable/viewable there |
 | `stock_adjustments` | Expiry write-off / damage / loss / correction, always reducing a batch's quantity — CRUD live from the Batches & Stock screen |
 | `activity_log` | Audit trail |
 | `license_state` | Single-row trial/license record |
@@ -90,18 +94,18 @@ deduction, so there's no race with a concurrent sale.
 
 ## What's next (not built yet)
 
-1. **Prescriptions register** — a standalone search/browse view over the
-   `prescriptions` table (creation already happens inline at POS), plus
-   the `multer` upload endpoint for the Rx photo (`uploads/rx/`,
-   gitignored) — schema and folder are ready, nothing serves it yet.
-2. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
-3. **Distributor ledger** — payment history/statement view; `PUT
+1. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
+2. **Distributor ledger** — payment history/statement view; `PUT
    /api/purchases/:id/payment` already records payments, this just
    surfaces them per distributor.
-4. **Sale returns** — `sales.status` already has a `Returned` value in its
+3. **Sale returns** — `sales.status` already has a `Returned` value in its
    CHECK constraint and `PUT /api/sales/:id/cancel` shows the restore-stock
    pattern to follow, but a partial-line return isn't implemented — only
    a full-sale cancel.
+4. **Multi-store UI** — the schema has supported multiple stores since day
+   one and every query is already `store_id`-scoped, but there's no
+   store-switcher in the UI yet; every user is just pinned to the store
+   they were seeded/created under.
 
 ## Licensing (7-day trial, then license required)
 
@@ -140,7 +144,7 @@ veda-pharmacy/
 │   ├── auth.js              # session gate (requireAuth, requireRole)
 │   └── license.js           # trial/license gate
 ├── routes/
-│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js
+│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js
 ├── utils/
 │   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
