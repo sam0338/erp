@@ -2,14 +2,14 @@
 let currentUser = null;
 let batchesCache = [];
 
-const EXPIRY_BADGE = { expired: 'badge-danger', near: 'badge-warn', ok: 'badge-ok' };
+const EXPIRY_BADGE = { expired: 'badge-red', near: 'badge-amber', ok: 'badge-green' };
 const ADJUSTMENT_TYPES = ['Expired', 'Damaged', 'Lost', 'Correction'];
 
 (async function init() {
   currentUser = await initShell({ activeView: 'batches' });
   if (!currentUser) return;
 
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
   document.getElementById('searchInput').addEventListener('input', debounce(loadBatches, 250));
@@ -25,7 +25,7 @@ function debounce(fn, ms) {
 }
 
 function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.getElementById('batchesTab').style.display = tab === 'batches' ? 'block' : 'none';
   document.getElementById('adjustmentsTab').style.display = tab === 'adjustments' ? 'block' : 'none';
   if (tab === 'adjustments') loadAdjustments();
@@ -57,10 +57,13 @@ async function loadBatches() {
 
 function renderBatchesTable(batches) {
   const tbody = document.getElementById('batchesTbody');
+  const emptyState = document.getElementById('batchesEmpty');
   if (batches.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No batches found. Receive a GRN under Purchases to bring stock in.</td></tr>';
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
 
   tbody.innerHTML = batches.map(b => {
     const days = daysUntil(b.expiry_date);
@@ -77,12 +80,12 @@ function renderBatchesTable(batches) {
         </td>
         <td class="mono">${escapeHtml(b.batch_no)}</td>
         <td>${fmtDate(b.mfg_date)}</td>
-        <td><span class="badge ${EXPIRY_BADGE[b.expiry_status] || 'badge-neutral'}">${expiryLabel}</span></td>
+        <td><span class="badge ${EXPIRY_BADGE[b.expiry_status] || 'badge-slate'}">${expiryLabel}</span></td>
         <td>${b.quantity}</td>
         <td>${fmtMoney(b.purchase_rate)}</td>
         <td>${fmtMoney(b.mrp)}</td>
         <td>${escapeHtml(b.distributor_name || '—')}</td>
-        <td>${b.quantity > 0 ? `<button class="btn btn-outline btn-sm" onclick="openAdjustModal(${b.id})">Adjust</button>` : ''}</td>
+        <td>${b.quantity > 0 ? `<button class="btn btn-secondary btn-sm" onclick="openAdjustModal(${b.id})">Adjust</button>` : ''}</td>
       </tr>
     `;
   }).join('');
@@ -101,7 +104,7 @@ async function loadAdjustments() {
         <td>${fmtDate(a.created_at)}</td>
         <td>${escapeHtml(a.item_name)}</td>
         <td class="mono">${escapeHtml(a.batch_no)}</td>
-        <td><span class="badge badge-neutral">${escapeHtml(a.adjustment_type)}</span></td>
+        <td><span class="badge badge-slate">${escapeHtml(a.adjustment_type)}</span></td>
         <td>${a.quantity} ${escapeHtml(a.unit)}</td>
         <td>${escapeHtml(a.reason || '—')}</td>
         <td>${escapeHtml(a.created_by_name || '—')}</td>

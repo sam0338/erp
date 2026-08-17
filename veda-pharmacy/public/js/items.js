@@ -62,32 +62,36 @@ async function loadItems() {
 
 function renderTable(items) {
   const tbody = document.getElementById('itemsTbody');
+  const emptyState = document.getElementById('itemsEmpty');
   if (items.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No items found. Try adjusting your search or filters, or add a new item.</td></tr>';
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
 
   tbody.innerHTML = items.map(item => {
     const lowStock = Number(item.total_stock) <= Number(item.reorder_level);
     const stockBadge = item.total_stock == 0
       ? '<span class="badge badge-danger">Out of stock</span>'
-      : (lowStock ? `<span class="badge badge-warn">${item.total_stock} low</span>` : `<span class="badge badge-ok">${item.total_stock}</span>`);
+      : (lowStock ? `<span class="badge badge-amber">${item.total_stock} low</span>` : `<span class="badge badge-green">${item.total_stock}</span>`);
+    const subLine = [item.manufacturer, item.generic_name].filter(Boolean).join(' · ');
     return `
       <tr${item.is_active ? '' : ' style="opacity:0.55;"'}>
         <td>
           <strong>${escapeHtml(item.name)}</strong>
-          ${item.manufacturer ? `<div class="muted" style="font-size:11.5px;">${escapeHtml(item.manufacturer)}</div>` : ''}
-          ${item.is_active ? '' : '<span class="badge badge-neutral" style="margin-top:4px;">Inactive</span>'}
+          ${subLine ? `<div class="muted" style="font-size:11.5px;">${escapeHtml(subLine)}</div>` : ''}
+          ${item.is_active ? '' : '<span class="badge badge-slate" style="margin-top:4px;">Inactive</span>'}
         </td>
-        <td>${escapeHtml(item.generic_name || '—')}</td>
-        <td><span class="badge ${SCHEDULE_BADGE[item.schedule] || 'badge-neutral'}">${SCHEDULE_LABEL[item.schedule] || item.schedule}</span></td>
+        <td>${escapeHtml(item.category || '—')}</td>
+        <td><span class="badge ${SCHEDULE_BADGE[item.schedule] || 'badge-slate'}">${SCHEDULE_LABEL[item.schedule] || item.schedule}</span></td>
         <td class="mono">${escapeHtml(item.hsn_code || '—')}</td>
         <td>${item.gst_rate}%</td>
         <td>${escapeHtml(item.pack_size || '—')} <span class="muted">/ ${escapeHtml(item.unit)}</span></td>
         <td>${stockBadge}</td>
         <td>${escapeHtml(item.rack_location || '—')}</td>
         <td style="white-space:nowrap;">
-          <button class="btn btn-outline btn-sm" onclick="openModal(${item.id})">Edit</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModal(${item.id})">Edit</button>
           ${item.is_active ? `<button class="btn btn-danger-outline btn-sm" onclick="handleDelete(${item.id})">Remove</button>` : ''}
         </td>
       </tr>

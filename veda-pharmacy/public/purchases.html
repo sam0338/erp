@@ -76,45 +76,56 @@
     </div>
   </div>
   <div class="page-content">
-    <div class="page-header">
-      <div>
-        <h1>Purchases / GRN</h1>
-        <div class="sub">Receiving stock from a distributor creates a batch for every line automatically.</div>
+    <div class="section-header">
+      <div class="section-title">Purchases / GRN</div>
+      <button class="btn btn-primary" id="newGrnBtn">➕ New GRN</button>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Receiving stock from a distributor creates a batch for every line automatically.</p>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-body">
+        <div class="filter-row" style="margin-bottom:0;">
+          <select id="distributorFilter" style="width:220px;"><option value="">All Distributors</option></select>
+          <select id="paymentStatusFilter" style="width:180px;">
+            <option value="">All Payment Status</option>
+            <option value="Unpaid">Unpaid</option>
+            <option value="Partial">Partial</option>
+            <option value="Paid">Paid</option>
+          </select>
+        </div>
       </div>
-      <button class="btn btn-primary" id="newGrnBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-        New GRN
-      </button>
     </div>
 
-    <div class="search-bar">
-      <select id="distributorFilter"><option value="">All Distributors</option></select>
-      <select id="paymentStatusFilter">
-        <option value="">All Payment Status</option>
-        <option value="Unpaid">Unpaid</option>
-        <option value="Partial">Partial</option>
-        <option value="Paid">Paid</option>
-      </select>
-    </div>
-
-    <div class="card" style="padding:0;overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>GRN No.</th>
-            <th>Distributor</th>
-            <th>Invoice No.</th>
-            <th>Invoice Date</th>
-            <th>Items</th>
-            <th>Total</th>
-            <th>Payment</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="purchasesTbody">
-          <tr><td colspan="8" class="empty-state">Loading purchases…</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Goods received</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>GRN No.</th>
+              <th>Distributor</th>
+              <th>Invoice No.</th>
+              <th>Invoice Date</th>
+              <th>Items</th>
+              <th>Total</th>
+              <th>Payment</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="purchasesTbody">
+            <tr><td colspan="8" class="empty-state">Loading purchases…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="purchasesEmpty" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-icon">📥</div>
+          <h3>No purchases recorded yet</h3>
+          <p>Click "New GRN" to receive your first delivery.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>

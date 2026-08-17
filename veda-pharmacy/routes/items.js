@@ -28,13 +28,20 @@ function validateItemBody(body, { partial } = {}) {
 router.get('/', (req, res) => {
   const { q, schedule, category, include_inactive } = req.query;
 
+  // total_stock is scoped to the caller's current store — items/distributors
+  // are a shared catalog, but batches (actual stock) are store-scoped (see
+  // the multi-store architecture note in db/schema.sql), so a cross-store
+  // sum here would misreport what's actually sellable from wherever the
+  // operator is currently working: FEFO in routes/sales.js only ever draws
+  // from the current store's batches, so the POS item-search preview needs
+  // to match that exactly, not show stock sitting in a different branch.
   let query = `
     SELECT i.*,
-      COALESCE((SELECT SUM(b.quantity) FROM batches b WHERE b.item_id = i.id), 0) AS total_stock
+      COALESCE((SELECT SUM(b.quantity) FROM batches b WHERE b.item_id = i.id AND b.store_id = ?), 0) AS total_stock
     FROM items i
     WHERE 1 = 1
   `;
-  const params = [];
+  const params = [req.session.storeId];
 
   if (!include_inactive) {
     query += ' AND i.is_active = 1';

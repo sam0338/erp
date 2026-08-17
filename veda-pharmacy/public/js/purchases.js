@@ -5,7 +5,7 @@ let distributorsCache = [];
 let itemsCache = [];
 let rowSeq = 0;
 
-const PAYMENT_BADGE = { Paid: 'badge-ok', Partial: 'badge-warn', Unpaid: 'badge-danger' };
+const PAYMENT_BADGE = { Paid: 'badge-green', Partial: 'badge-amber', Unpaid: 'badge-red' };
 
 (async function init() {
   currentUser = await initShell({ activeView: 'purchases' });
@@ -55,10 +55,13 @@ async function loadPurchases() {
 
 function renderPurchasesTable(purchases) {
   const tbody = document.getElementById('purchasesTbody');
+  const emptyState = document.getElementById('purchasesEmpty');
   if (purchases.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No purchases recorded yet. Click "New GRN" to receive your first delivery.</td></tr>';
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
 
   tbody.innerHTML = purchases.map(p => `
     <tr>

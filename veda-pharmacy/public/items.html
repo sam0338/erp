@@ -61,53 +61,66 @@
     </div>
   </div>
   <div class="page-content">
-    <div class="page-header">
-      <div>
-        <h1>Item Master</h1>
-        <div class="sub">The shared catalog every batch, purchase and sale is keyed off.</div>
+    <div class="section-header">
+      <div class="section-title">Item Master</div>
+      <button class="btn btn-primary" id="addItemBtn">➕ Add Item</button>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-body">
+        <div class="filter-row" style="margin-bottom:0;">
+          <div class="search-wrap" style="flex:1;min-width:240px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="Search by name, generic name, HSN code or manufacturer…">
+          </div>
+          <select id="scheduleFilter" style="width:160px;">
+            <option value="">All Schedules</option>
+            <option value="OTC">OTC</option>
+            <option value="H">Schedule H</option>
+            <option value="H1">Schedule H1</option>
+            <option value="X">Schedule X</option>
+          </select>
+          <select id="categoryFilter" style="width:160px;">
+            <option value="">All Categories</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--slate);white-space:nowrap;">
+            <input type="checkbox" id="includeInactive" style="width:auto;"> Show inactive
+          </label>
+        </div>
       </div>
-      <button class="btn btn-primary" id="addItemBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-        Add Item
-      </button>
     </div>
 
-    <div class="search-bar">
-      <input type="search" id="searchInput" placeholder="Search by name, generic name, HSN code or manufacturer…">
-      <select id="scheduleFilter">
-        <option value="">All Schedules</option>
-        <option value="OTC">OTC</option>
-        <option value="H">Schedule H</option>
-        <option value="H1">Schedule H1</option>
-        <option value="X">Schedule X</option>
-      </select>
-      <select id="categoryFilter">
-        <option value="">All Categories</option>
-      </select>
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);white-space:nowrap;">
-        <input type="checkbox" id="includeInactive"> Show inactive
-      </label>
-    </div>
-
-    <div class="card" style="padding:0;overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Generic</th>
-            <th>Schedule</th>
-            <th>HSN</th>
-            <th>GST%</th>
-            <th>Pack / Unit</th>
-            <th>Stock</th>
-            <th>Rack</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="itemsTbody">
-          <tr><td colspan="9" class="empty-state">Loading items…</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📦 Catalog — the shared item list every batch, purchase and sale is keyed off</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Category</th>
+              <th>Schedule</th>
+              <th>HSN</th>
+              <th>GST%</th>
+              <th>Pack / Unit</th>
+              <th>Stock (this store)</th>
+              <th>Rack</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="itemsTbody">
+            <tr><td colspan="9" class="empty-state">Loading items…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="itemsEmpty" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-icon">💊</div>
+          <h3>No medicines found</h3>
+          <p>Try adjusting your search or filters, or add a new item.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
