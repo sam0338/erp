@@ -195,8 +195,15 @@ router.put('/:id/payment', requireRole('Accounts'), (req, res) => {
 
   const paymentStatus = amountPaid <= 0 ? 'Unpaid' : (amountPaid >= purchase.total_amount ? 'Paid' : 'Partial');
 
-  db.prepare('UPDATE purchases SET amount_paid = ?, payment_status = ? WHERE id = ?')
-    .run(amountPaid, paymentStatus, id);
+  // paid_at dates the payment credit for the distributor ledger (routes/distributors.js)
+  // — cleared back to NULL if amount_paid is reset to 0, so an unpaid invoice
+  // doesn't leave a stale payment entry behind. Uses SQLite's datetime('now')
+  // rather than a JS timestamp to match created_at's format elsewhere (so
+  // string sort order == chronological order in the ledger query).
+  db.prepare(`
+    UPDATE purchases SET amount_paid = ?, payment_status = ?, paid_at = ${amountPaid > 0 ? "datetime('now')" : 'NULL'}
+    WHERE id = ?
+  `).run(amountPaid, paymentStatus, id);
   logActivity(db, req.session.userId, 'purchase_payment_updated', 'purchase', id, { amountPaid, paymentStatus });
   res.json({ success: true, payment_status: paymentStatus });
 });

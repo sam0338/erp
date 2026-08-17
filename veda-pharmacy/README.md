@@ -5,15 +5,15 @@ India — Node.js + Express + better-sqlite3 + plain HTML/JS frontend, no
 build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
-**Status: full operational loop + reporting.** Item Master, Distributors,
-Purchases/GRN, Batches & Stock, POS/Sales, Prescriptions, Doctors, and
-Reports are all live — a GRN creates batches, POS sells against them FEFO
-(oldest expiry first, splitting across lots automatically), a sale with a
-Schedule H1/X item is blocked until a prescription is captured, and the
-GST summary / expiry risk / low-stock / sales-register reports all read
-off that same data with CSV export. What's left is a distributor ledger
-view, partial-line sale returns, and a multi-store switcher UI — see
-"What's next" below.
+**Status: full operational loop + reporting + accounting.** Item Master,
+Distributors (with a full ledger/statement view), Purchases/GRN, Batches &
+Stock, POS/Sales, Prescriptions, Doctors, and Reports are all live — a GRN
+creates batches, POS sells against them FEFO (oldest expiry first,
+splitting across lots automatically), a sale with a Schedule H1/X item is
+blocked until a prescription is captured, and the GST summary / expiry
+risk / low-stock / sales-register reports all read off that same data
+with CSV export. What's left is partial-line sale returns, a multi-store
+switcher UI, and commission payout tracking — see "What's next" below.
 
 ## Quick start
 
@@ -94,6 +94,21 @@ the schema in ways that are painful to change later:
   separate from `discount_amount` so reporting can tell "why" a sale was
   discounted. A real repeat-customer loyalty system (a `customers` table,
   point balances, tiers) is a natural future addition but wasn't asked for.
+- **The distributor ledger is built from `purchases` directly, not a
+  separate payments-transaction table.** Each purchase already carries
+  `amount_paid`/`payment_status`, and `PUT /api/purchases/:id/payment` was
+  already the one place payments get recorded — adding a second,
+  disconnected payments table risked two sources of truth for "what's
+  owed." Instead, one column (`purchases.paid_at`, set whenever
+  `amount_paid` moves above zero) was enough to let the ledger show the
+  purchase (debit) and its payment (credit) as separate dated lines
+  instead of collapsing them into one row. The trade-off: this models
+  "amount currently paid so far" per invoice, not a full history of
+  discrete partial-payment events if an invoice is paid in three
+  installments over three different dates — only the latest cumulative
+  figure and its most recent update date are kept. Good enough for a
+  statement/reconciliation view; a true multi-installment history would
+  need that separate table after all.
 
 ## Database schema
 
@@ -104,7 +119,7 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `stores` | Branches/outlets (multi-store from day 1) |
 | `roles`, `users` | Admin / Pharmacist / Cashier / Accounts |
 | `items` | Shared item master — name, generic name, HSN, GST%, Schedule (OTC/H/H1/X), pack size, unit, reorder level |
-| `distributors` | Supplier ledger — CRUD live, includes state (used for CGST/SGST vs IGST) |
+| `distributors` | Supplier ledger — CRUD live, includes state (used for CGST/SGST vs IGST), plus a full statement view (opening balance, every purchase/payment as a dated debit/credit, running balance) |
 | `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction |
 | `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP — viewable/searchable live, with expiry status (expired/near/ok) computed per row |
 | `sales`, `sale_items` | POS invoices — live; each line records the exact FEFO-selected `batch_id` it was sold from, split across lots automatically if one lot doesn't cover the quantity. Also carries the patient loyalty discount and (see Architecture Decisions) doctor commission fields, both snapshotted at checkout |
@@ -137,22 +152,21 @@ deduction, so there's no race with a concurrent sale.
 
 ## What's next (not built yet)
 
-1. **Distributor ledger** — payment history/statement view; `PUT
-   /api/purchases/:id/payment` already records payments, this just
-   surfaces them per distributor.
-2. **Sale returns** — `sales.status` already has a `Returned` value in its
+1. **Sale returns** — `sales.status` already has a `Returned` value in its
    CHECK constraint and `PUT /api/sales/:id/cancel` shows the restore-stock
    pattern to follow, but a partial-line return isn't implemented — only
    a full-sale cancel.
-3. **Multi-store UI** — the schema has supported multiple stores since day
+2. **Multi-store UI** — the schema has supported multiple stores since day
    one and every query is already `store_id`-scoped, but there's no
    store-switcher in the UI yet; every user is just pinned to the store
    they were seeded/created under.
-4. **Commission payout tracking** — `doctors` shows commission *accrued*
+3. **Commission payout tracking** — `doctors` shows commission *accrued*
    (per doctor, per sale, excluding cancelled sales), but there's no
-   "mark as paid" flow yet the way `purchases`/distributors have one.
-   Would follow the same `amount_paid`/`payment_status` pattern as
-   `routes/purchases.js`'s `PUT /:id/payment` if it's needed.
+   "mark as paid" flow yet the way distributors now have via the ledger.
+4. **Multi-installment payment history** — as noted above, the distributor
+   ledger currently tracks one cumulative `amount_paid` per purchase, not
+   a log of each individual part-payment. Would need a dedicated
+   `distributor_payments` table if that granularity is ever needed.
 
 ## Licensing (7-day trial, then license required)
 

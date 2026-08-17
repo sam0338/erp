@@ -22,7 +22,7 @@ router.get('/', (req, res) => {
   let query = `
     SELECT d.*,
       COALESCE((SELECT SUM(p.total_amount) FROM purchases p WHERE p.distributor_id = d.id), 0) AS lifetime_purchases,
-      COALESCE((SELECT SUM(p.total_amount - p.amount_paid) FROM purchases p WHERE p.distributor_id = d.id), 0) AS outstanding_balance
+      d.opening_balance + COALESCE((SELECT SUM(p.total_amount - p.amount_paid) FROM purchases p WHERE p.distributor_id = d.id), 0) AS outstanding_balance
     FROM distributors d
     WHERE 1 = 1
   `;
@@ -47,6 +47,61 @@ router.get('/:id', (req, res) => {
   const distributor = db.prepare('SELECT * FROM distributors WHERE id = ?').get(req.params.id);
   if (!distributor) return res.status(404).json({ error: 'Distributor not found' });
   res.json(distributor);
+});
+
+// GET /api/distributors/:id/ledger - statement: opening balance, then every
+// purchase (debit) and payment (credit) as separate dated entries, with a
+// running balance. Same total as the "outstanding_balance" figure in the
+// list above, just itemized — see routes/purchases.js for how paid_at
+// dates the payment entry separately from the purchase's invoice_date.
+router.get('/:id/ledger', (req, res) => {
+  const distributor = db.prepare('SELECT * FROM distributors WHERE id = ?').get(req.params.id);
+  if (!distributor) return res.status(404).json({ error: 'Distributor not found' });
+
+  const purchases = db.prepare(`
+    SELECT * FROM purchases WHERE distributor_id = ? AND store_id = ?
+    ORDER BY invoice_date ASC, id ASC
+  `).all(req.params.id, req.session.storeId);
+
+  const entries = [];
+  purchases.forEach(p => {
+    entries.push({
+      type: 'purchase',
+      date: p.invoice_date,
+      reference: p.grn_no || p.invoice_no,
+      description: `GRN ${p.grn_no || '—'} — Invoice ${p.invoice_no}`,
+      debit: p.total_amount,
+      credit: 0
+    });
+    if (p.amount_paid > 0) {
+      entries.push({
+        type: 'payment',
+        date: p.paid_at || p.invoice_date,
+        reference: p.grn_no || p.invoice_no,
+        description: `Payment against ${p.grn_no || p.invoice_no}`,
+        debit: 0,
+        credit: p.amount_paid
+      });
+    }
+  });
+  // Lexicographic sort works here without reformatting: invoice_date is
+  // 'YYYY-MM-DD' and paid_at is 'YYYY-MM-DD HH:MM:SS' — the bare date
+  // string is always < any datetime string sharing that prefix, so a
+  // same-day purchase always sorts before its own payment.
+  entries.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+  let balance = distributor.opening_balance;
+  entries.forEach(e => {
+    balance = Math.round((balance + e.debit - e.credit + Number.EPSILON) * 100) / 100;
+    e.balance = balance;
+  });
+
+  res.json({
+    distributor,
+    opening_balance: distributor.opening_balance,
+    entries,
+    closing_balance: balance
+  });
 });
 
 // POST /api/distributors - create

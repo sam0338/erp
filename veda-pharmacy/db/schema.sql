@@ -163,6 +163,9 @@ CREATE TABLE IF NOT EXISTS purchases (
     total_amount REAL NOT NULL DEFAULT 0,
     payment_status TEXT NOT NULL DEFAULT 'Unpaid' CHECK (payment_status IN ('Unpaid','Partial','Paid')),
     amount_paid REAL NOT NULL DEFAULT 0,
+    paid_at TEXT,                       -- when amount_paid last changed to > 0 (see routes/purchases.js) —
+                                         -- lets the distributor ledger date the payment credit separately
+                                         -- from the purchase debit, instead of collapsing them into one row
     notes TEXT,
     created_by_user_id INTEGER,
     created_at TEXT DEFAULT (datetime('now')),

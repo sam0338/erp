@@ -62,6 +62,7 @@ function renderTable(distributors) {
         <td>${fmtMoney(d.lifetime_purchases)}</td>
         <td>${outstandingBadge}</td>
         <td style="white-space:nowrap;">
+          <button class="btn btn-outline btn-sm" onclick="openLedgerModal(${d.id})">Ledger</button>
           <button class="btn btn-outline btn-sm" onclick="openModal(${d.id})">Edit</button>
           ${d.is_active ? `<button class="btn btn-danger-outline btn-sm" onclick="handleDelete(${d.id})">Remove</button>` : ''}
         </td>
@@ -185,4 +186,102 @@ async function handleDelete(id) {
   } catch (err) {
     showToast(err.message, true);
   }
+}
+
+// ---------------- Ledger ----------------
+
+let ledgerCache = null;
+
+async function openLedgerModal(id) {
+  let ledger;
+  try {
+    ledger = await api.get(`/api/distributors/${id}/ledger`);
+  } catch (e) {
+    showToast(e.message, true);
+    return;
+  }
+  ledgerCache = ledger;
+
+  const rowsHtml = ledger.entries.length === 0
+    ? '<tr><td colspan="4" class="empty-state">No purchases recorded against this distributor yet.</td></tr>'
+    : ledger.entries.map(e => `
+        <tr>
+          <td>${fmtDate(e.date)}</td>
+          <td>${escapeHtml(e.description)}</td>
+          <td style="text-align:right;">${e.debit > 0 ? fmtMoney(e.debit) : ''}</td>
+          <td style="text-align:right;">${e.credit > 0 ? fmtMoney(e.credit) : ''}</td>
+          <td style="text-align:right;" class="mono">${fmtMoney(e.balance)}</td>
+        </tr>
+      `).join('');
+
+  const modalRoot = document.getElementById('modalRoot');
+  modalRoot.innerHTML = `
+    <div class="modal-overlay" id="ledgerOverlay">
+      <div class="modal" style="max-width:680px;">
+        <div class="modal-header">
+          <h3>${escapeHtml(ledger.distributor.name)} — Ledger</h3>
+          <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="ledgerPrintArea">
+          <div style="text-align:center;margin-bottom:14px;">
+            <strong style="font-family:var(--font-display);font-size:16px;color:var(--brand-900);">${escapeHtml(ledger.distributor.name)}</strong>
+            <div class="muted" style="font-size:11.5px;">Distributor Statement</div>
+          </div>
+          <table style="width:100%;font-size:12.5px;">
+            <thead>
+              <tr><th style="text-align:left;">Date</th><th style="text-align:left;">Description</th><th style="text-align:right;">Debit</th><th style="text-align:right;">Credit</th><th style="text-align:right;">Balance</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>—</td>
+                <td>Opening Balance</td>
+                <td></td>
+                <td></td>
+                <td style="text-align:right;" class="mono">${fmtMoney(ledger.opening_balance)}</td>
+              </tr>
+              ${rowsHtml}
+            </tbody>
+          </table>
+          <div class="divider"></div>
+          <div class="flex-between">
+            <strong>Closing Balance</strong>
+            <strong style="font-family:var(--font-mono);font-size:15px;color:${ledger.closing_balance > 0 ? 'var(--warn)' : 'var(--ok)'};">${fmtMoney(ledger.closing_balance)}</strong>
+          </div>
+          <p class="muted" style="font-size:11px;margin-top:10px;">Positive balance = amount owed to this distributor.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" onclick="closeModal()">Close</button>
+          <button type="button" class="btn btn-outline" onclick="exportLedgerCsv()">Export CSV</button>
+          <button type="button" class="btn btn-primary" onclick="window.print()">Print</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('ledgerOverlay').addEventListener('click', (e) => {
+    if (e.target.id === 'ledgerOverlay') closeModal();
+  });
+}
+
+function exportLedgerCsv() {
+  if (!ledgerCache) return;
+  const rows = [['Date', 'Description', 'Debit', 'Credit', 'Balance']];
+  rows.push(['', 'Opening Balance', '', '', ledgerCache.opening_balance]);
+  ledgerCache.entries.forEach(e => rows.push([e.date, e.description, e.debit || '', e.credit || '', e.balance]));
+  rows.push([]);
+  rows.push(['', 'Closing Balance', '', '', ledgerCache.closing_balance]);
+
+  const csv = rows.map(row => row.map(cell => {
+    const s = String(cell === null || cell === undefined ? '' : cell);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }).join(',')).join('\r\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${ledgerCache.distributor.name.replace(/[^a-z0-9]+/gi, '-')}-ledger.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

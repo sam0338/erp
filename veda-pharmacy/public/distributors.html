@@ -8,6 +8,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
+<style>
+  @media print {
+    body * { visibility: hidden; }
+    #ledgerPrintArea, #ledgerPrintArea * { visibility: visible; }
+    #ledgerPrintArea { position: absolute; top: 0; left: 0; width: 100%; }
+  }
+</style>
 </head>
 <body>
 <div id="trialBanner" style="display:none;"></div>

@@ -48,6 +48,9 @@ function migrate(db) {
   ensureColumn(db, 'sales', 'doctor_commission_amount', 'REAL NOT NULL DEFAULT 0');
   // CREATE INDEX IF NOT EXISTS is already idempotent — no ensureTable wrapper needed.
   db.exec('CREATE INDEX IF NOT EXISTS idx_sales_doctor ON sales(doctor_id)');
+
+  // Distributor ledger — dates the payment credit separately from the purchase debit
+  ensureColumn(db, 'purchases', 'paid_at', 'TEXT');
 }
 
 module.exports = { migrate, ensureColumn, ensureTable };
