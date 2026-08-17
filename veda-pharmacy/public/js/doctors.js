@@ -38,7 +38,7 @@ async function loadDoctors() {
 function renderTable(doctors) {
   const tbody = document.getElementById('doctorsTbody');
   if (doctors.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No doctors registered yet. Add one to start tracking referral commission.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No doctors registered yet. Add one to start tracking referral commission.</td></tr>';
     return;
   }
 
@@ -52,7 +52,8 @@ function renderTable(doctors) {
       <td class="mono">${escapeHtml(d.registration_no || '—')}</td>
       <td>${d.default_commission_pct}%</td>
       <td>${d.referred_sale_count}</td>
-      <td>${d.lifetime_commission_accrued > 0 ? `<span class="badge badge-warn">${fmtMoney(d.lifetime_commission_accrued)}</span>` : fmtMoney(0)}</td>
+      <td>${fmtMoney(d.lifetime_commission_accrued)}</td>
+      <td>${d.commission_unpaid > 0 ? `<span class="badge badge-warn">${fmtMoney(d.commission_unpaid)}</span>` : `<span class="badge badge-ok">${fmtMoney(0)}</span>`}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-outline btn-sm" onclick="openHistoryModal(${d.id})">History</button>
         <button class="btn btn-outline btn-sm" onclick="openModal(${d.id})">Edit</button>
@@ -166,16 +167,49 @@ async function openHistoryModal(id) {
   const modalRoot = document.getElementById('modalRoot');
   modalRoot.innerHTML = `
     <div class="modal-overlay" id="historyOverlay">
-      <div class="modal" style="max-width:600px;">
+      <div class="modal" style="max-width:640px;">
         <div class="modal-header">
           <h3>${escapeHtml(data.name)} — Commission History</h3>
           <button class="modal-close" onclick="closeModal()">&times;</button>
         </div>
         <div class="modal-body">
+          <div class="form-grid" style="margin-bottom:14px;">
+            <div><div class="muted" style="font-size:11px;">Lifetime Accrued</div><strong>${fmtMoney(data.unpaid_total + data.paid_total)}</strong></div>
+            <div><div class="muted" style="font-size:11px;">Paid Out</div><strong style="color:var(--ok);">${fmtMoney(data.paid_total)}</strong></div>
+            <div><div class="muted" style="font-size:11px;">Unpaid</div><strong style="color:${data.unpaid_total > 0 ? 'var(--warn)' : 'var(--ok)'};">${fmtMoney(data.unpaid_total)}</strong></div>
+          </div>
+
+          ${data.unpaid_total > 0 ? `
+            <form id="payCommissionForm" class="rx-panel" style="background:var(--brand-100);border-color:var(--brand-500);margin-bottom:14px;">
+              <div class="rx-title" style="color:var(--brand-700);">Pay Out ${fmtMoney(data.unpaid_total)}</div>
+              <div class="form-grid" style="gap:8px;">
+                <div class="form-field" style="margin-bottom:8px;">
+                  <label>Payment Mode</label>
+                  <select name="payment_mode">
+                    <option value="Cash">Cash</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+                <div class="form-field" style="margin-bottom:8px;">
+                  <label>Reference No.</label>
+                  <input type="text" name="reference_no" placeholder="Optional">
+                </div>
+              </div>
+              <div class="form-field" style="margin-bottom:8px;">
+                <label>Notes</label>
+                <input type="text" name="notes" placeholder="Optional">
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm">Settle ${fmtMoney(data.unpaid_total)}</button>
+            </form>
+          ` : ''}
+
+          <strong style="font-size:12.5px;color:var(--brand-900);">Sales</strong>
           ${data.sales.length === 0 ? '<p class="muted">No sales linked to this doctor yet.</p>' : `
-            <table style="width:100%;font-size:12.5px;">
+            <table style="width:100%;font-size:12.5px;margin-top:8px;">
               <thead>
-                <tr><th style="text-align:left;">Invoice</th><th style="text-align:left;">Patient</th><th>Total</th><th>Rate</th><th>Commission</th><th>Status</th></tr>
+                <tr><th style="text-align:left;">Invoice</th><th style="text-align:left;">Patient</th><th>Total</th><th>Rate</th><th>Commission</th><th>Status</th><th>Payout</th></tr>
               </thead>
               <tbody>
                 ${data.sales.map(s => `
@@ -186,11 +220,32 @@ async function openHistoryModal(id) {
                     <td style="text-align:right;">${s.doctor_commission_pct}%</td>
                     <td style="text-align:right;">${fmtMoney(s.doctor_commission_amount)}</td>
                     <td><span class="badge ${s.status === 'Cancelled' ? 'badge-danger' : 'badge-ok'}">${escapeHtml(s.status)}</span></td>
+                    <td>${s.commission_paid_at ? `<span class="badge badge-ok">Paid</span>` : (s.status === 'Completed' && s.doctor_commission_amount > 0 ? `<span class="badge badge-warn">Unpaid</span>` : '—')}</td>
                   </tr>
                 `).join('')}
               </tbody>
             </table>
           `}
+
+          ${data.payments.length > 0 ? `
+            <div class="divider"></div>
+            <strong style="font-size:12.5px;color:var(--brand-900);">Payout History</strong>
+            <table style="width:100%;font-size:12.5px;margin-top:8px;">
+              <thead>
+                <tr><th style="text-align:left;">Date</th><th style="text-align:left;">Mode</th><th style="text-align:left;">Reference</th><th style="text-align:right;">Amount</th></tr>
+              </thead>
+              <tbody>
+                ${data.payments.map(p => `
+                  <tr>
+                    <td>${fmtDate(p.payment_date)}</td>
+                    <td>${escapeHtml(p.payment_mode || '—')}</td>
+                    <td class="mono">${escapeHtml(p.reference_no || '—')}</td>
+                    <td style="text-align:right;">${fmtMoney(p.amount)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : ''}
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Close</button>
@@ -201,6 +256,29 @@ async function openHistoryModal(id) {
   document.getElementById('historyOverlay').addEventListener('click', (e) => {
     if (e.target.id === 'historyOverlay') closeModal();
   });
+
+  const payForm = document.getElementById('payCommissionForm');
+  if (payForm) {
+    payForm.addEventListener('submit', (e) => handlePayCommission(e, id));
+  }
+}
+
+async function handlePayCommission(e, doctorId) {
+  e.preventDefault();
+  const form = e.target;
+  const data = Object.fromEntries(new FormData(form).entries());
+  const submitBtn = form.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+
+  try {
+    const result = await api.post(`/api/doctors/${doctorId}/pay-commission`, data);
+    showToast(`Paid out ${fmtMoney(result.amount)} — ${result.sales_settled} sale(s) settled`);
+    await openHistoryModal(doctorId); // refresh the modal in place
+    loadDoctors(); // refresh the list's Accrued/Unpaid columns in the background
+  } catch (err) {
+    showToast(err.message, true);
+    submitBtn.disabled = false;
+  }
 }
 
 function closeModal() {

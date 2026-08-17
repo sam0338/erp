@@ -83,6 +83,28 @@ function migrate(db) {
   db.exec('CREATE INDEX IF NOT EXISTS idx_sale_returns_sale ON sale_returns(sale_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_sale_return_items_return ON sale_return_items(sale_return_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_sale_return_items_sale_item ON sale_return_items(sale_item_id)');
+
+  // Doctor commission payout tracking
+  ensureTable(db, 'doctor_commission_payments', `
+    CREATE TABLE doctor_commission_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doctor_id INTEGER NOT NULL,
+      store_id INTEGER NOT NULL,
+      payment_date TEXT DEFAULT (datetime('now')),
+      amount REAL NOT NULL,
+      payment_mode TEXT,
+      reference_no TEXT,
+      notes TEXT,
+      created_by_user_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (doctor_id) REFERENCES doctors(id),
+      FOREIGN KEY (store_id) REFERENCES stores(id),
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    )
+  `);
+  ensureColumn(db, 'sales', 'commission_paid_at', 'TEXT');
+  ensureColumn(db, 'sales', 'commission_payment_id', 'INTEGER REFERENCES doctor_commission_payments(id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_doctor_commission_payments_doctor ON doctor_commission_payments(doctor_id)');
 }
 
 module.exports = { migrate, ensureColumn, ensureTable };

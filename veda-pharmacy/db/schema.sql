@@ -123,6 +123,27 @@ CREATE TABLE IF NOT EXISTS doctors (
     created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- One payout settles ALL currently-unpaid commission for a doctor in one
+-- lump sum (see routes/doctors.js POST /:id/pay-commission) — the server
+-- computes the amount authoritatively from unpaid sales at payout time,
+-- it's never client-supplied. sales.commission_paid_at/commission_payment_id
+-- below record which sales that payout covered.
+CREATE TABLE IF NOT EXISTS doctor_commission_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    doctor_id INTEGER NOT NULL,
+    store_id INTEGER NOT NULL,
+    payment_date TEXT DEFAULT (datetime('now')),
+    amount REAL NOT NULL,
+    payment_mode TEXT,                  -- free text (Cash/UPI/Bank Transfer/Cheque, operator's own convention)
+    reference_no TEXT,
+    notes TEXT,
+    created_by_user_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (doctor_id) REFERENCES doctors(id),
+    FOREIGN KEY (store_id) REFERENCES stores(id),
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+);
+
 -- ---------- PRESCRIPTIONS (Schedule H1/X sales) ----------
 -- One prescription per sale transaction — covers every H1/X line on that
 -- sale. Text reference fields plus an optional photo of the physical Rx
@@ -244,6 +265,10 @@ CREATE TABLE IF NOT EXISTS sales (
     doctor_commission_pct REAL NOT NULL DEFAULT 0,     -- snapshot of doctors.default_commission_pct at time of sale —
                                                         -- later rate changes must not alter historical accrued amounts
     doctor_commission_amount REAL NOT NULL DEFAULT 0,  -- % of total_amount; does NOT reduce what the patient pays
+    commission_paid_at TEXT,            -- set when a doctor_commission_payments payout settles this sale's commission —
+                                         -- once set, a later return on this sale no longer claws the amount back
+                                         -- (see routes/sales.js): the money's already changed hands
+    commission_payment_id INTEGER,      -- which payout settled it, for traceability
     payment_mode TEXT NOT NULL DEFAULT 'Cash' CHECK (payment_mode IN ('Cash','UPI','Card','Credit')),
     payment_status TEXT NOT NULL DEFAULT 'Paid' CHECK (payment_status IN ('Paid','Partial','Unpaid')),
     status TEXT NOT NULL DEFAULT 'Completed' CHECK (status IN ('Completed','Returned','Cancelled')),
@@ -251,6 +276,7 @@ CREATE TABLE IF NOT EXISTS sales (
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (store_id) REFERENCES stores(id),
     FOREIGN KEY (prescription_id) REFERENCES prescriptions(id),
+    FOREIGN KEY (commission_payment_id) REFERENCES doctor_commission_payments(id),
     FOREIGN KEY (doctor_id) REFERENCES doctors(id),
     FOREIGN KEY (created_by_user_id) REFERENCES users(id),
     UNIQUE(store_id, invoice_no)
@@ -346,6 +372,7 @@ CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchas
 CREATE INDEX IF NOT EXISTS idx_purchases_store ON purchases(store_id);
 CREATE INDEX IF NOT EXISTS idx_sales_store_date ON sales(store_id, sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_doctor ON sales(doctor_id);
+CREATE INDEX IF NOT EXISTS idx_doctor_commission_payments_doctor ON doctor_commission_payments(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_batch ON sale_items(batch_id);
 CREATE INDEX IF NOT EXISTS idx_sale_returns_sale ON sale_returns(sale_id);

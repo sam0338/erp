@@ -367,7 +367,12 @@ router.post('/:id/returns', requireRole('Cashier', 'Pharmacist'), (req, res) => 
       // the CURRENT commission_amount matters: two returns covering 40%
       // then the remaining 60% of a sale must zero the commission out
       // completely, not compound down to 40% of 60% of the original.
-      if (sale.doctor_commission_pct > 0 && sale.total_amount > 0) {
+      // Skipped once commission_paid_at is set: the doctor's already been paid out
+      // for this sale (see routes/doctors.js POST /:id/pay-commission), so silently
+      // shrinking doctor_commission_amount here would understate what was actually
+      // paid without ever getting the money back — that reconciliation is a manual
+      // call for the operator, not something to automate.
+      if (sale.doctor_commission_pct > 0 && sale.total_amount > 0 && !sale.commission_paid_at) {
         const totalRefunded = db.prepare(
           'SELECT COALESCE(SUM(refund_amount), 0) as r FROM sale_returns WHERE sale_id = ?'
         ).get(id).r;

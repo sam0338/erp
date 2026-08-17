@@ -14,9 +14,11 @@ FEFO (oldest expiry first, splitting across lots automatically), a sale
 with a Schedule H1/X item is blocked until a prescription is captured, a
 return restores stock without ever mutating the original invoice, and the
 GST summary / expiry risk / low-stock / sales-register reports all read
-off that same data — net of returns — with CSV export. What's left is a
-multi-store switcher UI and commission payout tracking — see "What's
-next" below.
+off that same data — net of returns — with CSV export, and a doctor's
+accrued referral commission can be settled in one lump-sum payout with a
+full paid/unpaid audit trail. What's left is a multi-store switcher UI
+and a multi-installment distributor payment history — see "What's next"
+below.
 
 ## Quick start
 
@@ -91,6 +93,16 @@ the schema in ways that are painful to change later:
   consultant, not paid per-referral), your own applicable professional-
   conduct and anti-kickback rules still govern what you configure here —
   this app just tracks the number, it doesn't make the arrangement lawful.
+  Payout (`POST /api/doctors/:id/pay-commission`) settles ALL of a
+  doctor's currently-unpaid commission in one lump sum — the amount is
+  computed server-side from unpaid `Completed` sales at the moment of
+  payout and is never accepted from the client, so it can't drift from
+  what's actually owed. `sales.commission_paid_at` marks which sales a
+  payout covered; once set, a later return on that sale no longer claws
+  the commission back (see the return note below) — the money's already
+  changed hands, and reconciling a refund against an already-paid
+  commission is a manual call for the operator, not something this app
+  automates.
 - **Patient loyalty/incentive discount is a plain per-sale percentage**,
   not a persistent customer/points record — `sales.patient_incentive_pct`
   and `.patient_incentive_amount` are just another discount lane, kept
@@ -130,7 +142,10 @@ the schema in ways that are painful to change later:
   `net_sale_value = total_amount - SUM(all refunds so far)`, commission =
   `net_sale_value × doctor_commission_pct` (the fixed, checkout-time rate,
   never itself mutated) — verified this now zeroes out exactly across
-  multiple partial returns.
+  multiple partial returns. That clawback is itself skipped once a sale's
+  commission has already been paid out (see the Doctor commission note
+  above) — the return still restores stock and refunds the patient
+  normally, it just leaves the (already-settled) commission figure alone.
 
 ## Database schema
 
@@ -148,7 +163,7 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `sale_returns`, `sale_return_items` | Partial-line returns against a Completed sale — live; restores stock to the originating batch and proportionally claws back any doctor commission, without ever mutating the original sale |
 | `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales — live end to end: text created inline by `POST /api/sales`, photo attached/replaced afterwards from the register, both searchable/viewable there |
 | `stock_adjustments` | Expiry write-off / damage / loss / correction, always reducing a batch's quantity — CRUD live from the Batches & Stock screen |
-| `doctors` | Referral commission registry — name, phone, registration no., default commission % — CRUD live, with a per-doctor commission history view |
+| `doctors`, `doctor_commission_payments` | Referral commission registry — name, phone, registration no., default commission % — CRUD live, with a per-doctor commission history view and a "Pay Out" action that settles all unpaid commission in one lump sum |
 | `activity_log` | Audit trail |
 | `license_state` | Single-row trial/license record |
 
@@ -190,13 +205,16 @@ deduction, so there's no race with a concurrent sale.
    one and every query is already `store_id`-scoped, but there's no
    store-switcher in the UI yet; every user is just pinned to the store
    they were seeded/created under.
-2. **Commission payout tracking** — `doctors` shows commission *accrued*
-   (per doctor, per sale, excluding cancelled sales), but there's no
-   "mark as paid" flow yet the way distributors now have via the ledger.
-3. **Multi-installment payment history** — as noted above, the distributor
+2. **Multi-installment payment history** — as noted above, the distributor
    ledger currently tracks one cumulative `amount_paid` per purchase, not
    a log of each individual part-payment. Would need a dedicated
    `distributor_payments` table if that granularity is ever needed.
+3. **Partial commission payouts** — `POST /api/doctors/:id/pay-commission`
+   only supports settling *all* of a doctor's currently-unpaid commission
+   in one go, matching the common "settle up for the month" flow. Paying
+   an arbitrary partial amount and choosing which sales it covers isn't
+   supported — would need an allocation policy decided first (which sales
+   get marked paid when the amount doesn't divide evenly across them).
 
 ## Licensing (7-day trial, then license required)
 
