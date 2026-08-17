@@ -1,15 +1,15 @@
 // VEDA Pharmacy - Reports
 let currentUser = null;
 
-const EXPIRY_BADGE = { expired: 'badge-danger', near: 'badge-warn' };
-const PAYMENT_BADGE = { Paid: 'badge-ok', Partial: 'badge-warn', Unpaid: 'badge-danger' };
-const STATUS_BADGE = { Completed: 'badge-ok', Cancelled: 'badge-danger', Returned: 'badge-neutral' };
+const EXPIRY_BADGE = { expired: 'badge-red', near: 'badge-amber' };
+const PAYMENT_BADGE = { Paid: 'badge-green', Partial: 'badge-amber', Unpaid: 'badge-red' };
+const STATUS_BADGE = { Completed: 'badge-green', Cancelled: 'badge-red', Returned: 'badge-slate' };
 
 (async function init() {
   currentUser = await initShell({ activeView: 'reports' });
   if (!currentUser) return;
 
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
@@ -42,7 +42,7 @@ const STATUS_BADGE = { Completed: 'badge-ok', Cancelled: 'badge-danger', Returne
 })();
 
 function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   ['gst', 'expiry', 'lowstock', 'register'].forEach(t => {
     document.getElementById(t + 'Tab').style.display = t === tab ? 'block' : 'none';
   });
@@ -218,7 +218,7 @@ function renderLowStock(d) {
     <tr>
       <td><strong>${escapeHtml(i.name)}</strong>${i.generic_name ? `<div class="muted" style="font-size:11.5px;">${escapeHtml(i.generic_name)}</div>` : ''}</td>
       <td>${escapeHtml(i.category || '—')}</td>
-      <td>${i.total_stock === 0 ? '<span class="badge badge-danger">0</span>' : `<span class="badge badge-warn">${i.total_stock}</span>`} ${escapeHtml(i.unit)}</td>
+      <td>${i.total_stock === 0 ? '<span class="badge badge-red">0</span>' : `<span class="badge badge-amber">${i.total_stock}</span>`} ${escapeHtml(i.unit)}</td>
       <td>${i.reorder_level} ${escapeHtml(i.unit)}</td>
       <td>${i.qty_to_reorder_level} ${escapeHtml(i.unit)}</td>
     </tr>
@@ -254,13 +254,13 @@ function renderRegister(d) {
     .map(([mode, amt]) => `${mode}: ${fmtMoney(amt)}`).join(' · ') || '—';
 
   summaryEl.innerHTML = `
-    <div class="stat-card"><div class="label">Completed</div><div class="value">${d.completed_count}</div></div>
-    <div class="stat-card"><div class="label">Returned</div><div class="value">${d.returned_count}</div></div>
-    <div class="stat-card"><div class="label">Cancelled</div><div class="value">${d.cancelled_count}</div></div>
-    <div class="stat-card"><div class="label">Gross Total</div><div class="value">${fmtMoney(d.totals.total_amount)}</div></div>
-    <div class="stat-card"><div class="label">Returns</div><div class="value" style="color:var(--danger);">-${fmtMoney(d.totals.returns_amount)}</div></div>
-    <div class="stat-card"><div class="label">Net Total</div><div class="value accent">${fmtMoney(d.totals.net_total_amount)}</div></div>
-    <div class="stat-card"><div class="label">By Payment Mode</div><div class="hint" style="font-size:12px;margin-top:8px;">${paymentBreakdown}</div></div>
+    <div class="stat-card"><div class="stat-label">Completed</div><div class="stat-value">${d.completed_count}</div></div>
+    <div class="stat-card"><div class="stat-label">Returned</div><div class="stat-value">${d.returned_count}</div></div>
+    <div class="stat-card"><div class="stat-label">Cancelled</div><div class="stat-value">${d.cancelled_count}</div></div>
+    <div class="stat-card"><div class="stat-label">Gross Total</div><div class="stat-value">${fmtMoney(d.totals.total_amount)}</div></div>
+    <div class="stat-card"><div class="stat-label">Returns</div><div class="stat-value" style="color:var(--red);">-${fmtMoney(d.totals.returns_amount)}</div></div>
+    <div class="stat-card"><div class="stat-label">Net Total</div><div class="stat-value accent">${fmtMoney(d.totals.net_total_amount)}</div></div>
+    <div class="stat-card"><div class="stat-label">By Payment Mode</div><div class="stat-sub" style="font-size:12px;margin-top:8px;">${paymentBreakdown}</div></div>
   `;
 
   const tbody = document.getElementById('registerTbody');
@@ -274,8 +274,8 @@ function renderRegister(d) {
         <td>${escapeHtml(s.customer_name || '—')}</td>
         <td>${s.item_count}</td>
         <td>${fmtMoney(s.total_amount)}</td>
-        <td><span class="badge ${PAYMENT_BADGE[s.payment_status] || 'badge-neutral'}">${escapeHtml(s.payment_mode)}</span></td>
-        <td><span class="badge ${STATUS_BADGE[s.status] || 'badge-neutral'}">${escapeHtml(s.status)}</span></td>
+        <td><span class="badge ${PAYMENT_BADGE[s.payment_status] || 'badge-slate'}">${escapeHtml(s.payment_mode)}</span></td>
+        <td><span class="badge ${STATUS_BADGE[s.status] || 'badge-slate'}">${escapeHtml(s.status)}</span></td>
       </tr>
     `).join('');
   }
