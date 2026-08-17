@@ -74,6 +74,13 @@ async function initShell(opts) {
         banner.className = 'trial-banner';
         banner.style.display = 'flex';
         banner.innerHTML = `Trial: ${licenseStatus.trialDaysRemaining} day${licenseStatus.trialDaysRemaining === 1 ? '' : 's'} remaining. <a href="/license.html">Activate license →</a>`;
+        // #sidebar is position:fixed (MediPro's layout, not a document-flow
+        // grid), so it needs an explicit push-down to clear the banner —
+        // measured rather than hardcoded, since the banner can wrap to two
+        // lines on a narrow window. See the body.has-trial-banner rule and
+        // --trial-banner-height custom property in style.css.
+        document.body.classList.add('has-trial-banner');
+        document.documentElement.style.setProperty('--trial-banner-height', banner.offsetHeight + 'px');
       }
     }
   } catch (e) { /* ignore — license check is best-effort here */ }

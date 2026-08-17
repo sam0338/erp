@@ -6,7 +6,7 @@
 <title>VEDA Pharmacy</title>
 <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
 <style>
   .quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
@@ -14,78 +14,67 @@
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; font-size: 13px;
   }
-  .alert-banner.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn); }
-  .alert-banner.danger { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
-  .alert-banner.ok { background: var(--brand-100); color: var(--brand-700); border: 1px solid var(--brand-500); }
+  .alert-banner.warn { background: var(--amber-light); color: #92400e; border: 1px solid var(--amber); }
+  .alert-banner.danger { background: var(--red-light); color: #991b1b; border: 1px solid var(--red); }
   .alert-banner strong { font-weight: 700; }
   .alert-banner a { color: inherit; font-weight: 700; text-decoration: underline; white-space: nowrap; }
-  .dash-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; margin-top: 4px; }
-  .expiry-row.expired td:first-child { border-left: 3px solid var(--danger); }
-  .expiry-row.near td:first-child { border-left: 3px solid var(--warn); }
+  .expiry-row.expired td:first-child { border-left: 3px solid var(--red); }
+  .expiry-row.near td:first-child { border-left: 3px solid var(--amber); }
   #expiryPopupOverlay .modal { max-width: 560px; }
 </style>
 </head>
 <body>
 <div id="trialBanner" style="display:none;"></div>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">VEDA<small>Pharmacy</small></div>
-    <div class="store-tag" id="storeTag">Loading store…</div>
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">💊</div>
+    <div class="shop-name">VEDA<small>Pharmacy</small></div>
+    <div class="shop-sub" id="storeTag">Loading store…</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-section-label">Overview</div>
+    <a class="nav-item" data-href="dashboard" href="/dashboard.html"><span class="nav-icon">📊</span>Dashboard</a>
 
-    <div class="nav-group">
-      <div class="nav-label">Overview</div>
-      <a class="nav-item" data-href="dashboard" href="/dashboard.html"><span class="dot"></span>Dashboard</a>
-    </div>
+    <div class="nav-section-label">Catalog</div>
+    <a class="nav-item" data-href="items" href="/items.html"><span class="nav-icon">💊</span>Item Master</a>
 
-    <div class="nav-group">
-      <div class="nav-label">Catalog</div>
-      <a class="nav-item" data-href="items" href="/items.html"><span class="dot"></span>Item Master</a>
-    </div>
+    <div class="nav-section-label">Inventory</div>
+    <a class="nav-item" data-href="batches" href="/batches.html"><span class="nav-icon">📦</span>Batches &amp; Stock</a>
 
-    <div class="nav-group">
-      <div class="nav-label">Inventory</div>
-      <a class="nav-item" data-href="batches" href="/batches.html"><span class="dot"></span>Batches &amp; Stock</a>
-    </div>
+    <div class="nav-section-label">Purchases</div>
+    <a class="nav-item" data-href="distributors" href="/distributors.html"><span class="nav-icon">🚚</span>Distributors</a>
+    <a class="nav-item" data-href="purchases" href="/purchases.html"><span class="nav-icon">📥</span>Purchases / GRN</a>
 
-    <div class="nav-group">
-      <div class="nav-label">Purchases</div>
-      <a class="nav-item" data-href="distributors" href="/distributors.html"><span class="dot"></span>Distributors</a>
-      <a class="nav-item" data-href="purchases" href="/purchases.html"><span class="dot"></span>Purchases / GRN</a>
-    </div>
+    <div class="nav-section-label">Sales</div>
+    <a class="nav-item" data-href="sales" href="/sales.html"><span class="nav-icon">🧾</span>POS / Sales</a>
+    <a class="nav-item" data-href="prescriptions" href="/prescriptions.html"><span class="nav-icon">📋</span>Prescriptions</a>
+    <a class="nav-item" data-href="doctors" href="/doctors.html"><span class="nav-icon">🩺</span>Doctors</a>
 
-    <div class="nav-group">
-      <div class="nav-label">Sales</div>
-      <a class="nav-item" data-href="sales" href="/sales.html"><span class="dot"></span>POS / Sales</a>
-      <a class="nav-item" data-href="prescriptions" href="/prescriptions.html"><span class="dot"></span>Prescriptions</a>
-      <a class="nav-item" data-href="doctors" href="/doctors.html"><span class="dot"></span>Doctors</a>
-    </div>
+    <div class="nav-section-label">Insights</div>
+    <a class="nav-item" data-href="reports" href="/reports.html"><span class="nav-icon">📑</span>Reports</a>
 
-    <div class="nav-group">
-      <div class="nav-label">Insights</div>
-      <a class="nav-item" data-href="reports" href="/reports.html"><span class="dot"></span>Reports</a>
+    <div id="adminNavGroup" style="display:none;">
+      <div class="nav-section-label">Admin</div>
+      <a class="nav-item" data-href="stores" href="/stores.html"><span class="nav-icon">🏬</span>Stores</a>
     </div>
+  </div>
+  <div class="sidebar-bottom">
+    <div class="user-chip">
+      <span class="name" id="userName">—</span>
+      <span class="role" id="userRole">—</span>
+    </div>
+    <button class="btn btn-secondary btn-sm logout-btn" id="logoutBtn" style="width:100%;justify-content:center;">Sign out</button>
+  </div>
+</nav>
 
-    <div class="nav-group" id="adminNavGroup" style="display:none;">
-      <div class="nav-label">Admin</div>
-      <a class="nav-item" data-href="stores" href="/stores.html"><span class="dot"></span>Stores</a>
+<div id="main">
+  <div class="topbar">
+    <div class="topbar-title">Dashboard</div>
+    <div class="topbar-right">
+      <div class="topbar-date" id="topbarDate"></div>
     </div>
-
-    <div class="sidebar-footer">
-      <div class="user-chip">
-        <span class="name" id="userName">—</span>
-        <span class="role" id="userRole">—</span>
-      </div>
-      <button class="logout-btn" id="logoutBtn">Sign out</button>
-    </div>
-  </aside>
-
-  <main class="main">
-    <div class="page-header">
-      <div>
-        <h1>Dashboard</h1>
-        <div class="sub">Today's snapshot — sales, stock, and what needs attention.</div>
-      </div>
-    </div>
+  </div>
+  <div class="page-content">
 
     <div class="quick-actions">
       <a class="btn btn-primary" href="/sales.html">
@@ -96,42 +85,46 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
         New Purchase (GRN)
       </a>
-      <a class="btn btn-outline" href="/items.html">Add Item</a>
-      <a class="btn btn-outline" href="/batches.html">View Stock</a>
+      <a class="btn btn-secondary" href="/items.html">➕ Add Item</a>
+      <a class="btn btn-secondary" href="/batches.html">📦 View Stock</a>
     </div>
 
     <div id="dashAlerts"></div>
 
     <div class="stat-grid">
-      <div class="stat-card">
-        <div class="label">Today's Sales</div>
-        <div class="value" id="statTodaySales">—</div>
-        <div class="hint" id="statTodaySalesHint">Loading…</div>
+      <div class="stat-card teal">
+        <div class="stat-label">Today's Sales</div>
+        <div class="stat-value" id="statTodaySales">—</div>
+        <div class="stat-sub" id="statTodaySalesHint">Loading…</div>
+        <div class="stat-icon">💰</div>
       </div>
-      <div class="stat-card">
-        <div class="label">Revenue This Month</div>
-        <div class="value" id="statMonthRevenue">—</div>
-        <div class="hint" id="statMonthRevenueHint">Loading…</div>
+      <div class="stat-card green">
+        <div class="stat-label">Revenue This Month</div>
+        <div class="stat-value" id="statMonthRevenue">—</div>
+        <div class="stat-sub" id="statMonthRevenueHint">Loading…</div>
+        <div class="stat-icon">📈</div>
       </div>
-      <div class="stat-card">
-        <div class="label">Low / No Stock</div>
-        <div class="value accent" id="statLowStock">—</div>
-        <div class="hint">At or below reorder level</div>
+      <div class="stat-card amber">
+        <div class="stat-label">Low / No Stock</div>
+        <div class="stat-value" id="statLowStock">—</div>
+        <div class="stat-sub">At or below reorder level</div>
+        <div class="stat-icon">📉</div>
       </div>
-      <div class="stat-card">
-        <div class="label">Expiring Soon</div>
-        <div class="value accent" id="statExpiring">—</div>
-        <div class="hint" id="statExpiringHint">Within 90 days</div>
+      <div class="stat-card red">
+        <div class="stat-label">Expiring Soon</div>
+        <div class="stat-value" id="statExpiring">—</div>
+        <div class="stat-sub" id="statExpiringHint">Within 90 days</div>
+        <div class="stat-icon">⏰</div>
       </div>
     </div>
 
-    <div class="dash-grid">
+    <div class="two-col">
       <div class="card">
-        <div class="flex-between" style="margin-bottom:12px;">
-          <strong style="color:var(--brand-900);font-family:var(--font-display);font-size:14px;">Expiring Soon</strong>
-          <a href="/reports.html?tab=expiry" style="font-size:12px;font-weight:700;">View full report →</a>
+        <div class="card-header">
+          <span class="card-title">⏰ Expiring Soon</span>
+          <a href="/reports.html?tab=expiry" style="font-size:12px;font-weight:700;color:var(--teal);">View full report →</a>
         </div>
-        <div style="overflow-x:auto;">
+        <div class="table-wrap">
           <table>
             <thead><tr><th>Item</th><th>Batch</th><th>Expiry</th><th>Status</th><th>Qty</th></tr></thead>
             <tbody id="dashExpiryTbody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
@@ -140,11 +133,11 @@
       </div>
 
       <div class="card">
-        <div class="flex-between" style="margin-bottom:12px;">
-          <strong style="color:var(--brand-900);font-family:var(--font-display);font-size:14px;">Low Stock</strong>
-          <a href="/reports.html?tab=lowstock" style="font-size:12px;font-weight:700;">View full report →</a>
+        <div class="card-header">
+          <span class="card-title">📦 Low Stock</span>
+          <a href="/reports.html?tab=lowstock" style="font-size:12px;font-weight:700;color:var(--teal);">View full report →</a>
         </div>
-        <div style="overflow-x:auto;">
+        <div class="table-wrap">
           <table>
             <thead><tr><th>Item</th><th>Stock</th><th>Reorder At</th></tr></thead>
             <tbody id="dashLowStockTbody"><tr><td colspan="3" class="empty-state">Loading…</td></tr></tbody>
@@ -152,7 +145,7 @@
         </div>
       </div>
     </div>
-  </main>
+  </div>
 </div>
 
 <div id="toast" class="toast"></div>

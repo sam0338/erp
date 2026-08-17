@@ -6,64 +6,61 @@
 <title>Batches & Stock — VEDA Pharmacy</title>
 <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 <div id="trialBanner" style="display:none;"></div>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="brand">VEDA<small>Pharmacy</small></div>
-    <div class="store-tag" id="storeTag">Loading store…</div>
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">💊</div>
+    <div class="shop-name">VEDA<small>Pharmacy</small></div>
+    <div class="shop-sub" id="storeTag">Loading store…</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-section-label">Overview</div>
+    <a class="nav-item" data-href="dashboard" href="/dashboard.html"><span class="nav-icon">📊</span>Dashboard</a>
 
-    <div class="nav-group">
-      <div class="nav-label">Overview</div>
-      <a class="nav-item" data-href="dashboard" href="/dashboard.html"><span class="dot"></span>Dashboard</a>
+    <div class="nav-section-label">Catalog</div>
+    <a class="nav-item" data-href="items" href="/items.html"><span class="nav-icon">💊</span>Item Master</a>
+
+    <div class="nav-section-label">Inventory</div>
+    <a class="nav-item" data-href="batches" href="/batches.html"><span class="nav-icon">📦</span>Batches &amp; Stock</a>
+
+    <div class="nav-section-label">Purchases</div>
+    <a class="nav-item" data-href="distributors" href="/distributors.html"><span class="nav-icon">🚚</span>Distributors</a>
+    <a class="nav-item" data-href="purchases" href="/purchases.html"><span class="nav-icon">📥</span>Purchases / GRN</a>
+
+    <div class="nav-section-label">Sales</div>
+    <a class="nav-item" data-href="sales" href="/sales.html"><span class="nav-icon">🧾</span>POS / Sales</a>
+    <a class="nav-item" data-href="prescriptions" href="/prescriptions.html"><span class="nav-icon">📋</span>Prescriptions</a>
+    <a class="nav-item" data-href="doctors" href="/doctors.html"><span class="nav-icon">🩺</span>Doctors</a>
+
+    <div class="nav-section-label">Insights</div>
+    <a class="nav-item" data-href="reports" href="/reports.html"><span class="nav-icon">📑</span>Reports</a>
+
+    <div id="adminNavGroup" style="display:none;">
+      <div class="nav-section-label">Admin</div>
+      <a class="nav-item" data-href="stores" href="/stores.html"><span class="nav-icon">🏬</span>Stores</a>
     </div>
-
-    <div class="nav-group">
-      <div class="nav-label">Catalog</div>
-      <a class="nav-item" data-href="items" href="/items.html"><span class="dot"></span>Item Master</a>
+  </div>
+  <div class="sidebar-bottom">
+    <div class="user-chip">
+      <span class="name" id="userName">—</span>
+      <span class="role" id="userRole">—</span>
     </div>
+    <button class="btn btn-secondary btn-sm logout-btn" id="logoutBtn" style="width:100%;justify-content:center;">Sign out</button>
+  </div>
+</nav>
 
-    <div class="nav-group">
-      <div class="nav-label">Inventory</div>
-      <a class="nav-item" data-href="batches" href="/batches.html"><span class="dot"></span>Batches &amp; Stock</a>
+<div id="main">
+  <div class="topbar">
+    <div class="topbar-title">Batches &amp; Stock</div>
+    <div class="topbar-right">
+      <div class="topbar-date" id="topbarDate"></div>
     </div>
-
-    <div class="nav-group">
-      <div class="nav-label">Purchases</div>
-      <a class="nav-item" data-href="distributors" href="/distributors.html"><span class="dot"></span>Distributors</a>
-      <a class="nav-item" data-href="purchases" href="/purchases.html"><span class="dot"></span>Purchases / GRN</a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-label">Sales</div>
-      <a class="nav-item" data-href="sales" href="/sales.html"><span class="dot"></span>POS / Sales</a>
-      <a class="nav-item" data-href="prescriptions" href="/prescriptions.html"><span class="dot"></span>Prescriptions</a>
-      <a class="nav-item" data-href="doctors" href="/doctors.html"><span class="dot"></span>Doctors</a>
-    </div>
-
-    <div class="nav-group">
-      <div class="nav-label">Insights</div>
-      <a class="nav-item" data-href="reports" href="/reports.html"><span class="dot"></span>Reports</a>
-    </div>
-
-    <div class="nav-group" id="adminNavGroup" style="display:none;">
-      <div class="nav-label">Admin</div>
-      <a class="nav-item" data-href="stores" href="/stores.html"><span class="dot"></span>Stores</a>
-    </div>
-
-    <div class="sidebar-footer">
-      <div class="user-chip">
-        <span class="name" id="userName">—</span>
-        <span class="role" id="userRole">—</span>
-      </div>
-      <button class="logout-btn" id="logoutBtn">Sign out</button>
-    </div>
-  </aside>
-
-  <main class="main">
+  </div>
+  <div class="page-content">
     <div class="page-header">
       <div>
         <h1>Batches &amp; Stock</h1>
@@ -132,7 +129,7 @@
         </table>
       </div>
     </div>
-  </main>
+  </div>
 </div>
 
 <div id="toast" class="toast"></div>
