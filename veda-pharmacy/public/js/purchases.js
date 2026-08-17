@@ -71,7 +71,7 @@ function renderPurchasesTable(purchases) {
       <td>${fmtDate(p.invoice_date)}</td>
       <td>${p.item_count}</td>
       <td>${fmtMoney(p.total_amount)}</td>
-      <td><span class="badge ${PAYMENT_BADGE[p.payment_status] || 'badge-neutral'}">${escapeHtml(p.payment_status)}</span></td>
+      <td><span class="badge ${PAYMENT_BADGE[p.payment_status] || 'badge-slate'}">${escapeHtml(p.payment_status)}</span></td>
       <td><button class="btn btn-outline btn-sm" onclick="openDetailModal(${p.id})">View</button></td>
     </tr>
   `).join('');
@@ -379,7 +379,7 @@ async function openDetailModal(id) {
           <div class="flex-between">
             <div>
               <div class="muted" style="font-size:11px;">Payment Status</div>
-              <span class="badge ${PAYMENT_BADGE[purchase.payment_status] || 'badge-neutral'}">${escapeHtml(purchase.payment_status)}</span>
+              <span class="badge ${PAYMENT_BADGE[purchase.payment_status] || 'badge-slate'}">${escapeHtml(purchase.payment_status)}</span>
               <span class="muted" style="font-size:12px;margin-left:8px;">Paid ${fmtMoney(purchase.amount_paid)} of ${fmtMoney(purchase.total_amount)}</span>
             </div>
             <form id="paymentForm" style="display:flex;gap:8px;align-items:center;">

@@ -6,23 +6,30 @@ build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
 **Status: full operational loop + reporting + accounting + returns +
-multi-store, end to end.** Item Master, Distributors (with a full
-ledger/statement view), Purchases/GRN, Batches & Stock, POS/Sales
-(including partial-line returns), Prescriptions, Doctors, Reports, and
-Stores are all live — a GRN creates batches, POS sells against them FEFO
-(oldest expiry first, splitting across lots automatically), a sale with a
-Schedule H1/X item is blocked until a prescription is captured, a return
-restores stock without ever mutating the original invoice, the GST
-summary / expiry risk / low-stock / sales-register reports all read off
-that same data — net of returns — with CSV export, a doctor's accrued
-referral commission can be settled in one lump-sum payout with a full
-paid/unpaid audit trail, an Admin can create additional branches and
-switch the active store for their session from the sidebar, and the
-Dashboard is a real live snapshot — today's sales, this month's revenue,
-low-stock and expiring-soon counts with quick-action buttons to jump
-straight into a new sale or GRN, plus a persistent alert banner and a
-once-per-login popup surfacing what's expiring soon. What's left is a
-multi-installment distributor payment history — see "What's next" below.
+multi-store, end to end, on a rebuilt UI.** Item Master, Distributors
+(with a full ledger/statement view), Purchases/GRN, Batches & Stock,
+POS/Sales (including partial-line returns), Prescriptions, Doctors,
+Reports, and Stores are all live — a GRN creates batches, POS sells
+against them FEFO (oldest expiry first, splitting across lots
+automatically), a sale with a Schedule H1/X item is blocked until a
+prescription is captured, a return restores stock without ever mutating
+the original invoice, the GST summary / expiry risk / low-stock /
+sales-register reports all read off that same data — net of returns —
+with CSV export, a doctor's accrued referral commission can be settled in
+one lump-sum payout with a full paid/unpaid audit trail, an Admin can
+create additional branches and switch the active store for their session
+from the sidebar, and the Dashboard is a real live snapshot — today's
+sales, this month's revenue, low-stock and expiring-soon counts with
+quick-action buttons to jump straight into a new sale or GRN, plus a
+persistent alert banner and a once-per-login popup surfacing what's
+expiring soon. Every sale requires a patient name and a doctor tag
+(a registered doctor, or an explicit Walk-in / No Doctor) — see the
+Architecture Decisions below for why. The whole UI was reskinned onto a
+navy/teal design system (ported from a reference app the operator
+preferred, MediStore Pro) while every screen kept talking to this same
+backend the whole time — see "MediStore Pro-style reskin" below for what
+that did and didn't change. What's left is a multi-installment
+distributor payment history — see "What's next" below.
 
 ## Quick start
 
@@ -222,6 +229,58 @@ the schema in ways that are painful to change later:
   query param so the dashboard's "Review →" / "View full report" links
   can deep-link straight into the Expiry or Low Stock tab instead of
   always landing on GST Summary.
+- **MediStore Pro-style reskin: the visual layer was replaced, the
+  backend was not.** The operator supplied a reference app, MediStore
+  Pro, whose UI/reports they preferred, and asked for its look plus
+  VEDA's feature set. MediStore Pro's own server turned out to be plain
+  JSON files rewritten whole on every write (no locking, no
+  transactions), with zero authentication anywhere and CORS wide open —
+  fine for a single-PC demo, unsafe for a real multi-counter pharmacy
+  handling money and Schedule H1/X drugs. So only its CSS/markup design
+  language was adopted; every screen still talks to this app's own
+  Express+SQLite backend, session auth, and business logic — none of
+  which changed. Concretely: `public/css/style.css` is MediPro's
+  component CSS (navy sidebar, teal accent, cards, stat-cards, tables,
+  badges, modals, tabs, alerts, toast, A5 bill print styles) plus a
+  compatibility layer of old-class-name and old-CSS-variable aliases
+  (`.modal-overlay`, `.form-field`, `.badge-ok`/`-warn`/`-danger`,
+  `.tab-bar`/`.tab-btn`, `--brand-900`, `--ink`, `--paper`, `--accent`,
+  `--danger`, ...) mapped onto the equivalent new rule, which is what let
+  every page's already-working JS-generated markup keep rendering
+  correctly the moment the stylesheet was swapped, before any page's own
+  markup was touched. Every page's outer shell (sidebar/topbar) was then
+  rebuilt against MediPro's real markup (`#sidebar`/`#main`/`.topbar`/
+  `.page-content`, real `<a href>` navigation — not MediPro's own
+  onclick-driven SPA divs, since this stays a genuine multi-page app,
+  each screen its own file, exactly as before), and each page's content
+  was then given a real pass onto MediPro's actual list-page components
+  (search-icon filter cards, card-header table cards, rich icon+heading
+  empty-states) rather than just riding the alias layer indefinitely.
+  The one deliberate design upgrade taken from MediPro rather than just
+  its skin: the printed POS receipt now uses MediPro's actual `.a5-bill`
+  layout (dark header band, patient/doctor/invoice meta strip, itemized
+  table with an Rx badge on Schedule H1/X lines, boxed totals) instead of
+  VEDA's old plain two-column table — genuinely nicer, not just
+  reskinned. Three real bugs were caught and fixed purely by doing this
+  systematically rather than page-by-page in isolation: MediPro's
+  stylesheet carried `@media print { body { display: none } }`, harmless
+  for MediPro (which never printed from its main window at all) but fatal
+  for VEDA's print-one-component pattern (used by both the distributor
+  ledger and the POS receipt) — `display:none` removes the target from
+  the render tree regardless of any `visibility:visible` override further
+  down, so this would have silently produced a blank page on every print
+  until caught; the Sales Register's summary stat cards were still built
+  on the pre-rename `.label`/`.value`/`.hint` classes with no alias ever
+  added for them (every other renamed thing got one), so they'd been
+  unstyled since the very first pass; and `login.html`'s brand wordmark
+  hardcoded `font-family: 'Manrope'`, a font this app stopped loading
+  when the `<link>` tags switched to Inter+JetBrains Mono, so it had been
+  silently falling back to a default sans-serif. A full grep-based audit
+  (every `var(--x)` reference checked against what's actually defined,
+  every `.tab-btn`/`.badge-*`/`class="app-shell"` pattern checked for
+  stragglers) was run as the final step specifically to catch this class
+  of issue — a partial reskin is worse than no reskin, since it looks
+  like an oversight rather than a deliberate choice.
 
 ## Database schema
 
@@ -287,6 +346,12 @@ deduction, so there's no race with a concurrent sale.
    an arbitrary partial amount and choosing which sales it covers isn't
    supported — would need an allocation policy decided first (which sales
    get marked paid when the amount doesn't divide evenly across them).
+3. **Installer icon still shows the old green pharmacy-cross badge** —
+   `packaging/app-icon.ico` was generated to match VEDA's original
+   green/gold palette and wasn't regenerated for the navy/teal reskin.
+   Cosmetic only (doesn't affect anything at runtime), but worth doing
+   before the next installer build for visual consistency with the app
+   itself.
 
 ## Licensing (7-day trial, then license required)
 

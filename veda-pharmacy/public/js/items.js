@@ -73,7 +73,7 @@ function renderTable(items) {
   tbody.innerHTML = items.map(item => {
     const lowStock = Number(item.total_stock) <= Number(item.reorder_level);
     const stockBadge = item.total_stock == 0
-      ? '<span class="badge badge-danger">Out of stock</span>'
+      ? '<span class="badge badge-red">Out of stock</span>'
       : (lowStock ? `<span class="badge badge-amber">${item.total_stock} low</span>` : `<span class="badge badge-green">${item.total_stock}</span>`);
     const subLine = [item.manufacturer, item.generic_name].filter(Boolean).join(' · ');
     return `

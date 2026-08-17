@@ -1,7 +1,7 @@
 // VEDA Pharmacy - Dashboard
 let currentUser = null;
 
-const EXPIRY_BADGE = { expired: 'badge-danger', near: 'badge-warn' };
+const EXPIRY_BADGE = { expired: 'badge-red', near: 'badge-amber' };
 
 (async function init() {
   currentUser = await initShell({ activeView: 'dashboard' });
@@ -72,7 +72,7 @@ function renderLowStock(result) {
   tbody.innerHTML = items.slice(0, 8).map(i => `
     <tr>
       <td>${escapeHtml(i.name)}</td>
-      <td><span class="badge badge-danger">${i.total_stock} ${escapeHtml(i.unit)}</span></td>
+      <td><span class="badge badge-red">${i.total_stock} ${escapeHtml(i.unit)}</span></td>
       <td class="muted">${i.reorder_level} ${escapeHtml(i.unit)}</td>
     </tr>
   `).join('');
