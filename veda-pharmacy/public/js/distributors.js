@@ -37,21 +37,24 @@ async function loadDistributors() {
 
 function renderTable(distributors) {
   const tbody = document.getElementById('distributorsTbody');
+  const emptyState = document.getElementById('distributorsEmpty');
   if (distributors.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No distributors found. Add one to start recording purchases.</td></tr>';
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
 
   tbody.innerHTML = distributors.map(d => {
     const outstandingBadge = d.outstanding_balance > 0
-      ? `<span class="badge badge-warn">${fmtMoney(d.outstanding_balance)}</span>`
-      : `<span class="badge badge-ok">${fmtMoney(0)}</span>`;
+      ? `<span class="badge badge-amber">${fmtMoney(d.outstanding_balance)}</span>`
+      : `<span class="badge badge-green">${fmtMoney(0)}</span>`;
     return `
       <tr${d.is_active ? '' : ' style="opacity:0.55;"'}>
         <td>
           <strong>${escapeHtml(d.name)}</strong>
           ${d.city ? `<div class="muted" style="font-size:11.5px;">${escapeHtml(d.city)}${d.state ? ', ' + escapeHtml(d.state) : ''}</div>` : ''}
-          ${d.is_active ? '' : '<span class="badge badge-neutral" style="margin-top:4px;">Inactive</span>'}
+          ${d.is_active ? '' : '<span class="badge badge-slate" style="margin-top:4px;">Inactive</span>'}
         </td>
         <td>
           ${escapeHtml(d.contact_person || '—')}
@@ -62,8 +65,8 @@ function renderTable(distributors) {
         <td>${fmtMoney(d.lifetime_purchases)}</td>
         <td>${outstandingBadge}</td>
         <td style="white-space:nowrap;">
-          <button class="btn btn-outline btn-sm" onclick="openLedgerModal(${d.id})">Ledger</button>
-          <button class="btn btn-outline btn-sm" onclick="openModal(${d.id})">Edit</button>
+          <button class="btn btn-secondary btn-sm" onclick="openLedgerModal(${d.id})">Ledger</button>
+          <button class="btn btn-secondary btn-sm" onclick="openModal(${d.id})">Edit</button>
           ${d.is_active ? `<button class="btn btn-danger-outline btn-sm" onclick="handleDelete(${d.id})">Remove</button>` : ''}
         </td>
       </tr>

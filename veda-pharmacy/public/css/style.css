@@ -448,7 +448,15 @@ tr:last-child td { border-bottom: none; }
 .rx-panel { border: 1.5px solid var(--amber); background: var(--amber-light); border-radius: var(--radius); padding: 12px 14px; margin: 14px 0; }
 .rx-panel .rx-title { font-weight: 700; color: #92400e; font-size: 12.5px; margin-bottom: 8px; }
 
-@media print { body { display: none !important; } }
+/* NOTE: MediPro's own stylesheet had `@media print { body { display: none } }`
+   here — it never printed from the main window at all. VEDA does: the
+   distributor ledger and POS receipt both use the print-one-component
+   pattern (hide everything, show just the target #xPrintArea absolute-
+   positioned — see the per-page <style> block in distributors.html and
+   sales.html), which `display:none` on body would break outright, since
+   a display:none element and everything inside it is removed from the
+   render tree entirely regardless of any visibility:visible override
+   further down. So that rule is deliberately NOT carried over. */
 
 /* A5 Bill Preview */
 .a5-bill { font-family: 'Inter', Arial, sans-serif; font-size: 11px; line-height: 1.4; color: #111; background: #fff; width: 100%; max-width: 148mm; margin: 0 auto; }

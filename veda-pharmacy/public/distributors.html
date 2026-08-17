@@ -68,41 +68,55 @@
     </div>
   </div>
   <div class="page-content">
-    <div class="page-header">
-      <div>
-        <h1>Distributors</h1>
-        <div class="sub">Your supplier ledger — who you buy stock from.</div>
+    <div class="section-header">
+      <div class="section-title">Distributors</div>
+      <button class="btn btn-primary" id="addDistributorBtn">➕ Add Distributor</button>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Your supplier ledger — who you buy stock from.</p>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-body">
+        <div class="filter-row" style="margin-bottom:0;">
+          <div class="search-wrap" style="flex:1;min-width:240px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="Search by name, contact person, phone or GSTIN…">
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--slate);white-space:nowrap;">
+            <input type="checkbox" id="includeInactive" style="width:auto;"> Show inactive
+          </label>
+        </div>
       </div>
-      <button class="btn btn-primary" id="addDistributorBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-        Add Distributor
-      </button>
     </div>
 
-    <div class="search-bar">
-      <input type="search" id="searchInput" placeholder="Search by name, contact person, phone or GSTIN…">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);white-space:nowrap;">
-        <input type="checkbox" id="includeInactive"> Show inactive
-      </label>
-    </div>
-
-    <div class="card" style="padding:0;overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>Distributor</th>
-            <th>Contact</th>
-            <th>GSTIN</th>
-            <th>Drug License</th>
-            <th>Lifetime Purchases</th>
-            <th>Outstanding</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="distributorsTbody">
-          <tr><td colspan="7" class="empty-state">Loading distributors…</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🚚 Suppliers</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Distributor</th>
+              <th>Contact</th>
+              <th>GSTIN</th>
+              <th>Drug License</th>
+              <th>Lifetime Purchases</th>
+              <th>Outstanding</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="distributorsTbody">
+            <tr><td colspan="7" class="empty-state">Loading distributors…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="distributorsEmpty" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-icon">🚚</div>
+          <h3>No distributors yet</h3>
+          <p>Add your first supplier to start receiving stock.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
