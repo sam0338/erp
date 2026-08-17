@@ -61,42 +61,56 @@
     </div>
   </div>
   <div class="page-content">
-    <div class="page-header">
-      <div>
-        <h1>Doctors</h1>
-        <div class="sub">Referral commission registry — a sale only accrues commission when the prescribing doctor is registered here.</div>
+    <div class="section-header">
+      <div class="section-title">Doctors</div>
+      <button class="btn btn-primary" id="addDoctorBtn">➕ Add Doctor</button>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Referral commission registry — a sale only accrues commission when the prescribing doctor is registered here.</p>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-body">
+        <div class="filter-row" style="margin-bottom:0;">
+          <div class="search-wrap" style="flex:1;min-width:240px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="Search by name, phone or registration no…">
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--slate);white-space:nowrap;">
+            <input type="checkbox" id="includeInactive" style="width:auto;"> Show inactive
+          </label>
+        </div>
       </div>
-      <button class="btn btn-primary" id="addDoctorBtn">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
-        Add Doctor
-      </button>
     </div>
 
-    <div class="search-bar">
-      <input type="search" id="searchInput" placeholder="Search by name, phone or registration no…">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);white-space:nowrap;">
-        <input type="checkbox" id="includeInactive"> Show inactive
-      </label>
-    </div>
-
-    <div class="card" style="padding:0;overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>Doctor</th>
-            <th>Phone</th>
-            <th>Reg. No.</th>
-            <th>Commission %</th>
-            <th>Referred Sales</th>
-            <th>Accrued</th>
-            <th>Unpaid</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="doctorsTbody">
-          <tr><td colspan="8" class="empty-state">Loading doctors…</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">🩺 Registry</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Doctor</th>
+              <th>Phone</th>
+              <th>Reg. No.</th>
+              <th>Commission %</th>
+              <th>Referred Sales</th>
+              <th>Accrued</th>
+              <th>Unpaid</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="doctorsTbody">
+            <tr><td colspan="8" class="empty-state">Loading doctors…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="doctorsEmpty" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-icon">🩺</div>
+          <h3>No doctors registered yet</h3>
+          <p>Add a doctor to start tracking referral commission on their sales.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>

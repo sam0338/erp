@@ -37,26 +37,29 @@ async function loadDoctors() {
 
 function renderTable(doctors) {
   const tbody = document.getElementById('doctorsTbody');
+  const emptyState = document.getElementById('doctorsEmpty');
   if (doctors.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No doctors registered yet. Add one to start tracking referral commission.</td></tr>';
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
 
   tbody.innerHTML = doctors.map(d => `
     <tr${d.is_active ? '' : ' style="opacity:0.55;"'}>
       <td>
         <strong>${escapeHtml(d.name)}</strong>
-        ${d.is_active ? '' : '<span class="badge badge-neutral" style="margin-top:4px;">Inactive</span>'}
+        ${d.is_active ? '' : '<span class="badge badge-slate" style="margin-top:4px;">Inactive</span>'}
       </td>
       <td>${escapeHtml(d.phone || '—')}</td>
       <td class="mono">${escapeHtml(d.registration_no || '—')}</td>
       <td>${d.default_commission_pct}%</td>
       <td>${d.referred_sale_count}</td>
       <td>${fmtMoney(d.lifetime_commission_accrued)}</td>
-      <td>${d.commission_unpaid > 0 ? `<span class="badge badge-warn">${fmtMoney(d.commission_unpaid)}</span>` : `<span class="badge badge-ok">${fmtMoney(0)}</span>`}</td>
+      <td>${d.commission_unpaid > 0 ? `<span class="badge badge-amber">${fmtMoney(d.commission_unpaid)}</span>` : `<span class="badge badge-green">${fmtMoney(0)}</span>`}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-outline btn-sm" onclick="openHistoryModal(${d.id})">History</button>
-        <button class="btn btn-outline btn-sm" onclick="openModal(${d.id})">Edit</button>
+        <button class="btn btn-secondary btn-sm" onclick="openHistoryModal(${d.id})">History</button>
+        <button class="btn btn-secondary btn-sm" onclick="openModal(${d.id})">Edit</button>
         ${d.is_active ? `<button class="btn btn-danger-outline btn-sm" onclick="handleDelete(${d.id})">Remove</button>` : ''}
       </td>
     </tr>
@@ -219,8 +222,8 @@ async function openHistoryModal(id) {
                     <td style="text-align:right;">${fmtMoney(s.total_amount)}</td>
                     <td style="text-align:right;">${s.doctor_commission_pct}%</td>
                     <td style="text-align:right;">${fmtMoney(s.doctor_commission_amount)}</td>
-                    <td><span class="badge ${s.status === 'Cancelled' ? 'badge-danger' : 'badge-ok'}">${escapeHtml(s.status)}</span></td>
-                    <td>${s.commission_paid_at ? `<span class="badge badge-ok">Paid</span>` : (s.status === 'Completed' && s.doctor_commission_amount > 0 ? `<span class="badge badge-warn">Unpaid</span>` : '—')}</td>
+                    <td><span class="badge ${s.status === 'Cancelled' ? 'badge-red' : 'badge-green'}">${escapeHtml(s.status)}</span></td>
+                    <td>${s.commission_paid_at ? `<span class="badge badge-green">Paid</span>` : (s.status === 'Completed' && s.doctor_commission_amount > 0 ? `<span class="badge badge-amber">Unpaid</span>` : '—')}</td>
                   </tr>
                 `).join('')}
               </tbody>
