@@ -31,4 +31,16 @@ function generateInvoiceNo(db, storeId) {
   return `INV-${year}-${seq}`;
 }
 
-module.exports = { logActivity, generateGrnNo, generateInvoiceNo };
+// RET-YYYY-00001, sequential per store within the calendar year — an
+// internal reference only, not a GST credit note number (see the note on
+// sale_returns in db/schema.sql).
+function generateReturnNo(db, storeId) {
+  const year = dayjs().format('YYYY');
+  const row = db.prepare(
+    `SELECT COUNT(*) as c FROM sale_returns WHERE store_id = ? AND return_no LIKE ?`
+  ).get(storeId, `RET-${year}-%`);
+  const seq = String(row.c + 1).padStart(5, '0');
+  return `RET-${year}-${seq}`;
+}
+
+module.exports = { logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo };

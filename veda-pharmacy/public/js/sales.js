@@ -412,12 +412,17 @@ async function openHistoryDetail(id) {
     return;
   }
 
-  const canCancel = sale.status === 'Completed' && currentUser.role !== 'Cashier';
+  // Cancel is a full-sale void; it's blocked server-side once any return
+  // exists (partially-restored stock would otherwise get double-restored)
+  // — mirror that here so the button doesn't invite a request that's just
+  // going to be rejected.
+  const canCancel = sale.status === 'Completed' && sale.returns.length === 0 && currentUser.role !== 'Cashier';
+  const canReturn = sale.status === 'Completed';
 
   const modalRoot = document.getElementById('modalRoot');
   modalRoot.innerHTML = `
     <div class="modal-overlay" id="detailOverlay">
-      <div class="modal" style="max-width:640px;">
+      <div class="modal" style="max-width:680px;">
         <div class="modal-header">
           <h3>${escapeHtml(sale.invoice_no)}</h3>
           <button class="modal-close" onclick="closeModal()">&times;</button>
@@ -431,20 +436,35 @@ async function openHistoryDetail(id) {
           </div>
 
           <table class="line-table" style="width:100%;border-collapse:collapse;">
-            <thead><tr><th style="text-align:left;">Item</th><th>Batch</th><th>Qty</th><th>Rate</th><th>GST%</th><th>Line Total</th></tr></thead>
+            <thead><tr><th style="text-align:left;">Item</th><th>Batch</th><th>Qty</th><th>Rate</th><th>GST%</th><th>Line Total</th>${canReturn ? '<th>Return Qty</th>' : ''}</tr></thead>
             <tbody>
-              ${sale.items.map(l => `
+              ${sale.items.map(l => {
+                const remaining = l.quantity - l.returned_quantity;
+                return `
                 <tr>
-                  <td>${escapeHtml(l.item_name)}</td>
+                  <td>
+                    ${escapeHtml(l.item_name)}
+                    ${l.returned_quantity > 0 ? `<div class="muted" style="font-size:11px;">${l.returned_quantity} of ${l.quantity} returned</div>` : ''}
+                  </td>
                   <td class="mono">${escapeHtml(l.batch_no)}</td>
                   <td>${l.quantity} ${escapeHtml(l.unit)}</td>
                   <td>${fmtMoney(l.sale_rate)}</td>
                   <td>${l.gst_rate}%</td>
                   <td>${fmtMoney(l.line_total)}</td>
+                  ${canReturn ? `<td>${remaining > 0 ? `<input type="number" min="0" max="${remaining}" value="0" data-sale-item-id="${l.id}" class="return-qty-input" style="width:56px;padding:5px 6px;border:1px solid var(--line);border-radius:5px;">` : '<span class="muted">—</span>'}</td>` : ''}
                 </tr>
-              `).join('')}
+              `;
+              }).join('')}
             </tbody>
           </table>
+
+          ${canReturn ? `
+            <div class="form-field" style="margin-top:10px;">
+              <label>Return Reason</label>
+              <input type="text" id="returnReason" placeholder="Optional">
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" id="processReturnBtn">Process Return</button>
+          ` : ''}
 
           <div class="grn-totals" style="margin-top:10px;">
             <table>
@@ -479,6 +499,24 @@ async function openHistoryDetail(id) {
               </div>
             </div>
           ` : ''}
+
+          ${sale.returns.length > 0 ? `
+            <div class="divider"></div>
+            <strong style="font-size:12.5px;color:var(--brand-900);">Returns</strong>
+            <table style="width:100%;font-size:12.5px;margin-top:8px;">
+              <thead><tr><th style="text-align:left;">Return No.</th><th style="text-align:left;">Date</th><th style="text-align:left;">Items</th><th style="text-align:right;">Refund</th></tr></thead>
+              <tbody>
+                ${sale.returns.map(r => `
+                  <tr>
+                    <td class="mono">${escapeHtml(r.return_no)}</td>
+                    <td>${fmtDate(r.return_date)}</td>
+                    <td>${r.items.map(i => `${escapeHtml(i.item_name)} × ${i.quantity}`).join(', ')}${r.reason ? `<div class="muted" style="font-size:11px;">${escapeHtml(r.reason)}</div>` : ''}</td>
+                    <td style="text-align:right;">${fmtMoney(r.refund_amount)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          ` : ''}
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-outline" onclick="closeModal()">Close</button>
@@ -504,5 +542,37 @@ async function openHistoryDetail(id) {
         showToast(e.message, true);
       }
     });
+  }
+  const returnBtn = document.getElementById('processReturnBtn');
+  if (returnBtn) {
+    returnBtn.addEventListener('click', () => handleProcessReturn(sale.id));
+  }
+}
+
+async function handleProcessReturn(saleId) {
+  const inputs = document.querySelectorAll('.return-qty-input');
+  const items = [];
+  inputs.forEach(el => {
+    const qty = parseInt(el.value, 10) || 0;
+    if (qty > 0) items.push({ sale_item_id: parseInt(el.dataset.saleItemId, 10), quantity: qty });
+  });
+
+  if (items.length === 0) {
+    showToast('Enter a return quantity for at least one line', true);
+    return;
+  }
+
+  const reason = document.getElementById('returnReason').value || null;
+  const btn = document.getElementById('processReturnBtn');
+  btn.disabled = true;
+
+  try {
+    const result = await api.post(`/api/sales/${saleId}/returns`, { items, reason });
+    showToast(`Return processed — ${result.return_no}, refund ${fmtMoney(result.refund_amount)}`);
+    await openHistoryDetail(saleId); // refresh the modal in place with updated quantities/status
+    loadHistory(); // refresh the underlying list's status badge in the background
+  } catch (e) {
+    showToast(e.message, true);
+    btn.disabled = false;
   }
 }

@@ -5,15 +5,16 @@ India — Node.js + Express + better-sqlite3 + plain HTML/JS frontend, no
 build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
-**Status: full operational loop + reporting + accounting.** Item Master,
-Distributors (with a full ledger/statement view), Purchases/GRN, Batches &
-Stock, POS/Sales, Prescriptions, Doctors, and Reports are all live — a GRN
-creates batches, POS sells against them FEFO (oldest expiry first,
-splitting across lots automatically), a sale with a Schedule H1/X item is
-blocked until a prescription is captured, and the GST summary / expiry
-risk / low-stock / sales-register reports all read off that same data
-with CSV export. What's left is partial-line sale returns, a multi-store
-switcher UI, and commission payout tracking — see "What's next" below.
+**Status: full operational loop + reporting + accounting + returns.** Item
+Master, Distributors (with a full ledger/statement view), Purchases/GRN,
+Batches & Stock, POS/Sales (including partial-line returns), Prescriptions,
+Doctors, and Reports are all live — a GRN creates batches, POS sells
+against them FEFO (oldest expiry first, splitting across lots
+automatically), a sale with a Schedule H1/X item is blocked until a
+prescription is captured, and the GST summary / expiry risk / low-stock /
+sales-register reports all read off that same data with CSV export.
+What's left is a multi-store switcher UI and commission payout tracking —
+see "What's next" below.
 
 ## Quick start
 
@@ -109,6 +110,25 @@ the schema in ways that are painful to change later:
   figure and its most recent update date are kept. Good enough for a
   statement/reconciliation view; a true multi-installment history would
   need that separate table after all.
+- **Sale returns never mutate the original sale.** A return is its own
+  `sale_returns`/`sale_return_items` header+lines, restoring stock to the
+  exact batch each unit was sold from; `sales.total_amount` etc. stay the
+  historical record of what was actually invoiced. Because of that, `PUT
+  /api/sales/:id/cancel` (full-sale void, restores every line's *original*
+  quantity) is blocked once any return exists against a sale — cancelling
+  on top of a partial return would double-restore the portion the return
+  already put back. Once every line is fully returned via the return
+  flow, `sales.status` flips to `'Returned'` on its own.
+  Doctor commission is clawed back proportionally on a return, and this
+  needed a real fix during development: the first version reduced the
+  *current* `doctor_commission_amount` by a percentage of each return's
+  refund, which compounds wrong — two returns covering 40% then the
+  remaining 60% of a sale left 2.4% of the original commission still
+  accrued instead of zero. It's recomputed from scratch each time instead:
+  `net_sale_value = total_amount - SUM(all refunds so far)`, commission =
+  `net_sale_value × doctor_commission_pct` (the fixed, checkout-time rate,
+  never itself mutated) — verified this now zeroes out exactly across
+  multiple partial returns.
 
 ## Database schema
 
@@ -123,6 +143,7 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction |
 | `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP — viewable/searchable live, with expiry status (expired/near/ok) computed per row |
 | `sales`, `sale_items` | POS invoices — live; each line records the exact FEFO-selected `batch_id` it was sold from, split across lots automatically if one lot doesn't cover the quantity. Also carries the patient loyalty discount and (see Architecture Decisions) doctor commission fields, both snapshotted at checkout |
+| `sale_returns`, `sale_return_items` | Partial-line returns against a Completed sale — live; restores stock to the originating batch and proportionally claws back any doctor commission, without ever mutating the original sale |
 | `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales — live end to end: text created inline by `POST /api/sales`, photo attached/replaced afterwards from the register, both searchable/viewable there |
 | `stock_adjustments` | Expiry write-off / damage / loss / correction, always reducing a batch's quantity — CRUD live from the Batches & Stock screen |
 | `doctors` | Referral commission registry — name, phone, registration no., default commission % — CRUD live, with a per-doctor commission history view |
@@ -152,21 +173,21 @@ deduction, so there's no race with a concurrent sale.
 
 ## What's next (not built yet)
 
-1. **Sale returns** — `sales.status` already has a `Returned` value in its
-   CHECK constraint and `PUT /api/sales/:id/cancel` shows the restore-stock
-   pattern to follow, but a partial-line return isn't implemented — only
-   a full-sale cancel.
-2. **Multi-store UI** — the schema has supported multiple stores since day
+1. **Multi-store UI** — the schema has supported multiple stores since day
    one and every query is already `store_id`-scoped, but there's no
    store-switcher in the UI yet; every user is just pinned to the store
    they were seeded/created under.
-3. **Commission payout tracking** — `doctors` shows commission *accrued*
+2. **Commission payout tracking** — `doctors` shows commission *accrued*
    (per doctor, per sale, excluding cancelled sales), but there's no
    "mark as paid" flow yet the way distributors now have via the ledger.
-4. **Multi-installment payment history** — as noted above, the distributor
+3. **Multi-installment payment history** — as noted above, the distributor
    ledger currently tracks one cumulative `amount_paid` per purchase, not
    a log of each individual part-payment. Would need a dedicated
    `distributor_payments` table if that granularity is ever needed.
+4. **Returns in reporting** — the Sales Register and GST Summary reports
+   still reflect gross sales; they don't currently net out `sale_returns`.
+   The data's all there (`refund_amount` per return, per sale) — just not
+   surfaced in `routes/reports.js` yet.
 
 ## Licensing (7-day trial, then license required)
 
@@ -207,7 +228,7 @@ veda-pharmacy/
 ├── routes/
 │   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js, doctors.js, reports.js
 ├── utils/
-│   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo
+│   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
 ├── public/                  # static frontend — one HTML page per module + shared shell.js/api.js/style.css
 ├── license-tool/            # VENDOR-ONLY key generator — never ship this folder

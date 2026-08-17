@@ -277,6 +277,39 @@ CREATE TABLE IF NOT EXISTS sale_items (
     FOREIGN KEY (batch_id) REFERENCES batches(id)
 );
 
+-- ---------- SALE RETURNS (partial-line, unlike the full-sale PUT /:id/cancel) ----------
+-- The original sale row is never mutated by a return — it stays the
+-- historical record of what was sold. A return is tracked as its own
+-- header + lines, restoring stock to the exact batch each returned unit
+-- was sold from. Multiple returns can accumulate against the same
+-- sale_items row over time (see routes/sales.js for the "remaining
+-- returnable quantity" check that prevents over-returning); once every
+-- line is fully returned, sales.status flips to 'Returned'.
+CREATE TABLE IF NOT EXISTS sale_returns (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_id INTEGER NOT NULL,
+    store_id INTEGER NOT NULL,
+    return_no TEXT,                     -- our internal reference (RET-YYYY-NNNNN) — not a GST credit note number
+    return_date TEXT DEFAULT (datetime('now')),
+    refund_amount REAL NOT NULL DEFAULT 0,  -- sum of this return's line refunds, GST-inclusive like the original sale
+    reason TEXT,
+    created_by_user_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (sale_id) REFERENCES sales(id),
+    FOREIGN KEY (store_id) REFERENCES stores(id),
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS sale_return_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sale_return_id INTEGER NOT NULL,
+    sale_item_id INTEGER NOT NULL,      -- the specific original sale_items row this quantity is returned from
+    quantity INTEGER NOT NULL,
+    refund_amount REAL NOT NULL DEFAULT 0,  -- proportional share of that sale_item's line_total
+    FOREIGN KEY (sale_return_id) REFERENCES sale_returns(id),
+    FOREIGN KEY (sale_item_id) REFERENCES sale_items(id)
+);
+
 -- ---------- STOCK ADJUSTMENTS (expiry write-off, damage, loss, correction) ----------
 CREATE TABLE IF NOT EXISTS stock_adjustments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -315,4 +348,7 @@ CREATE INDEX IF NOT EXISTS idx_sales_store_date ON sales(store_id, sale_date);
 CREATE INDEX IF NOT EXISTS idx_sales_doctor ON sales(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_batch ON sale_items(batch_id);
+CREATE INDEX IF NOT EXISTS idx_sale_returns_sale ON sale_returns(sale_id);
+CREATE INDEX IF NOT EXISTS idx_sale_return_items_return ON sale_return_items(sale_return_id);
+CREATE INDEX IF NOT EXISTS idx_sale_return_items_sale_item ON sale_return_items(sale_item_id);
 CREATE INDEX IF NOT EXISTS idx_stock_adjustments_batch ON stock_adjustments(batch_id);

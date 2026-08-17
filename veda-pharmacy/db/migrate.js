@@ -51,6 +51,38 @@ function migrate(db) {
 
   // Distributor ledger — dates the payment credit separately from the purchase debit
   ensureColumn(db, 'purchases', 'paid_at', 'TEXT');
+
+  // Partial-line sale returns
+  ensureTable(db, 'sale_returns', `
+    CREATE TABLE sale_returns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_id INTEGER NOT NULL,
+      store_id INTEGER NOT NULL,
+      return_no TEXT,
+      return_date TEXT DEFAULT (datetime('now')),
+      refund_amount REAL NOT NULL DEFAULT 0,
+      reason TEXT,
+      created_by_user_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (sale_id) REFERENCES sales(id),
+      FOREIGN KEY (store_id) REFERENCES stores(id),
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    )
+  `);
+  ensureTable(db, 'sale_return_items', `
+    CREATE TABLE sale_return_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sale_return_id INTEGER NOT NULL,
+      sale_item_id INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,
+      refund_amount REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (sale_return_id) REFERENCES sale_returns(id),
+      FOREIGN KEY (sale_item_id) REFERENCES sale_items(id)
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sale_returns_sale ON sale_returns(sale_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sale_return_items_return ON sale_return_items(sale_return_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sale_return_items_sale_item ON sale_return_items(sale_item_id)');
 }
 
 module.exports = { migrate, ensureColumn, ensureTable };

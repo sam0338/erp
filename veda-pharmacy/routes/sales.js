@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db/connection');
-const { logActivity, generateInvoiceNo } = require('../utils/helpers');
+const { logActivity, generateInvoiceNo, generateReturnNo } = require('../utils/helpers');
 const { requireRole } = require('../middleware/auth');
 
 const router = express.Router();
@@ -113,7 +113,8 @@ router.get('/:id', (req, res) => {
   if (!sale) return res.status(404).json({ error: 'Sale not found' });
 
   const items = db.prepare(`
-    SELECT si.*, i.name AS item_name, i.unit, i.schedule, b.batch_no, b.expiry_date
+    SELECT si.*, i.name AS item_name, i.unit, i.schedule, b.batch_no, b.expiry_date,
+      COALESCE((SELECT SUM(sri.quantity) FROM sale_return_items sri WHERE sri.sale_item_id = si.id), 0) AS returned_quantity
     FROM sale_items si
     JOIN items i ON si.item_id = i.id
     JOIN batches b ON si.batch_id = b.id
@@ -125,7 +126,23 @@ router.get('/:id', (req, res) => {
     ? db.prepare('SELECT * FROM prescriptions WHERE id = ?').get(sale.prescription_id)
     : null;
 
-  res.json({ ...sale, items, prescription });
+  const returns = db.prepare(`
+    SELECT sr.*, u.full_name AS created_by_name
+    FROM sale_returns sr LEFT JOIN users u ON sr.created_by_user_id = u.id
+    WHERE sr.sale_id = ?
+    ORDER BY sr.id
+  `).all(sale.id).map(r => ({
+    ...r,
+    items: db.prepare(`
+      SELECT sri.*, i.name AS item_name
+      FROM sale_return_items sri
+      JOIN sale_items si ON sri.sale_item_id = si.id
+      JOIN items i ON si.item_id = i.id
+      WHERE sri.sale_return_id = ?
+    `).all(r.id)
+  }));
+
+  res.json({ ...sale, items, prescription, returns });
 });
 
 // POST /api/sales - ring up a sale: FEFO-allocates stock, computes
@@ -285,12 +302,118 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
   }
 });
 
+// POST /api/sales/:id/returns - process a partial-line return: restores
+// stock to the exact batch each returned unit came from, records the
+// return as its own header+lines (the original sale is never mutated —
+// see the note on sale_returns in db/schema.sql), and proportionally
+// claws back any accrued doctor commission on the refunded portion, using
+// the sale's original, immutable total_amount as the basis so the math
+// stays correct across multiple partial returns over time.
+router.post('/:id/returns', requireRole('Cashier', 'Pharmacist'), (req, res) => {
+  const { id } = req.params;
+  const sale = db.prepare('SELECT * FROM sales WHERE id = ? AND store_id = ?').get(id, req.session.storeId);
+  if (!sale) return res.status(404).json({ error: 'Sale not found' });
+  if (sale.status === 'Cancelled') return res.status(400).json({ error: 'This sale was cancelled — there is nothing left to return' });
+  if (sale.status === 'Returned') return res.status(400).json({ error: 'This sale has already been fully returned' });
+  if (!Array.isArray(req.body.items) || req.body.items.length === 0) {
+    return res.status(400).json({ error: 'At least one line is required' });
+  }
+
+  const saleItems = db.prepare('SELECT * FROM sale_items WHERE sale_id = ?').all(id);
+  const saleItemsById = Object.fromEntries(saleItems.map(si => [si.id, si]));
+
+  const lines = [];
+  for (const [i, line] of req.body.items.entries()) {
+    const n = i + 1;
+    const saleItem = saleItemsById[line.sale_item_id];
+    if (!saleItem) return res.status(400).json({ error: `Line ${n}: not a line item on this sale` });
+    const qty = parseInt(line.quantity, 10);
+    if (!Number.isFinite(qty) || qty <= 0) return res.status(400).json({ error: `Line ${n}: quantity must be a positive number` });
+
+    const alreadyReturned = db.prepare(
+      'SELECT COALESCE(SUM(quantity), 0) as q FROM sale_return_items WHERE sale_item_id = ?'
+    ).get(saleItem.id).q;
+    const remaining = saleItem.quantity - alreadyReturned;
+    if (qty > remaining) {
+      return res.status(400).json({ error: `Line ${n}: only ${remaining} unit(s) remain returnable on this line` });
+    }
+
+    lines.push({ saleItem, qty, refund: round2(saleItem.line_total * qty / saleItem.quantity) });
+  }
+
+  const refundAmount = round2(lines.reduce((s, l) => s + l.refund, 0));
+
+  try {
+    const returnId = db.transaction(() => {
+      const returnNo = generateReturnNo(db, sale.store_id);
+      const info = db.prepare(`
+        INSERT INTO sale_returns (sale_id, store_id, return_no, refund_amount, reason, created_by_user_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, sale.store_id, returnNo, refundAmount, req.body.reason || null, req.session.userId);
+      const newReturnId = info.lastInsertRowid;
+
+      lines.forEach(l => {
+        db.prepare(`
+          INSERT INTO sale_return_items (sale_return_id, sale_item_id, quantity, refund_amount)
+          VALUES (?, ?, ?, ?)
+        `).run(newReturnId, l.saleItem.id, l.qty, l.refund);
+        db.prepare('UPDATE batches SET quantity = quantity + ? WHERE id = ?').run(l.qty, l.saleItem.batch_id);
+      });
+
+      // Recomputed from scratch each time using the fixed original rate
+      // (doctor_commission_pct is a checkout-time snapshot, never mutated —
+      // see routes/doctors.js) against the net (non-returned) sale value.
+      // Deriving it this way instead of repeatedly shaving a percentage off
+      // the CURRENT commission_amount matters: two returns covering 40%
+      // then the remaining 60% of a sale must zero the commission out
+      // completely, not compound down to 40% of 60% of the original.
+      if (sale.doctor_commission_pct > 0 && sale.total_amount > 0) {
+        const totalRefunded = db.prepare(
+          'SELECT COALESCE(SUM(refund_amount), 0) as r FROM sale_returns WHERE sale_id = ?'
+        ).get(id).r;
+        const netSaleValue = Math.max(0, sale.total_amount - totalRefunded);
+        const newCommission = round2(netSaleValue * sale.doctor_commission_pct / 100);
+        db.prepare('UPDATE sales SET doctor_commission_amount = ? WHERE id = ?').run(newCommission, id);
+      }
+
+      // If every line is now fully returned, the sale is done.
+      const stillOutstanding = db.prepare(`
+        SELECT COUNT(*) as c FROM sale_items si
+        WHERE si.sale_id = ? AND si.quantity > COALESCE((SELECT SUM(sri.quantity) FROM sale_return_items sri WHERE sri.sale_item_id = si.id), 0)
+      `).get(id).c;
+      if (stillOutstanding === 0) {
+        db.prepare("UPDATE sales SET status = 'Returned' WHERE id = ?").run(id);
+      }
+
+      return newReturnId;
+    })();
+
+    logActivity(db, req.session.userId, 'sale_return_created', 'sale', id, { returnId, refundAmount });
+    const ret = db.prepare('SELECT return_no, refund_amount FROM sale_returns WHERE id = ?').get(returnId);
+    res.json({ success: true, id: returnId, return_no: ret.return_no, refund_amount: ret.refund_amount });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // PUT /api/sales/:id/cancel - void a sale and restore every batch it drew from
 router.put('/:id/cancel', requireRole('Pharmacist'), (req, res) => {
   const { id } = req.params;
   const sale = db.prepare('SELECT * FROM sales WHERE id = ? AND store_id = ?').get(id, req.session.storeId);
   if (!sale) return res.status(404).json({ error: 'Sale not found' });
   if (sale.status === 'Cancelled') return res.status(400).json({ error: 'Sale is already cancelled' });
+
+  // A full cancel restores every sale_item's ORIGINAL quantity. If any
+  // partial return already ran, part of that quantity is already back in
+  // the batch — cancelling on top would double-restore it. Simplest safe
+  // fix: once any return exists, the return flow is the only way to give
+  // back the rest (it already tracks per-line remaining quantity correctly).
+  const returnCount = db.prepare('SELECT COUNT(*) as c FROM sale_returns WHERE sale_id = ?').get(id).c;
+  if (returnCount > 0) {
+    return res.status(400).json({
+      error: 'This sale has return(s) recorded against it — cancel is not available. Process the remaining quantity as a return instead.'
+    });
+  }
 
   const items = db.prepare('SELECT * FROM sale_items WHERE sale_id = ?').all(id);
 
