@@ -8,6 +8,22 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
+<style>
+  .quick-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+  .alert-banner {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; font-size: 13px;
+  }
+  .alert-banner.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn); }
+  .alert-banner.danger { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger); }
+  .alert-banner.ok { background: var(--brand-100); color: var(--brand-700); border: 1px solid var(--brand-500); }
+  .alert-banner strong { font-weight: 700; }
+  .alert-banner a { color: inherit; font-weight: 700; text-decoration: underline; white-space: nowrap; }
+  .dash-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; margin-top: 4px; }
+  .expiry-row.expired td:first-child { border-left: 3px solid var(--danger); }
+  .expiry-row.near td:first-child { border-left: 3px solid var(--warn); }
+  #expiryPopupOverlay .modal { max-width: 560px; }
+</style>
 </head>
 <body>
 <div id="trialBanner" style="display:none;"></div>
@@ -67,39 +83,74 @@
     <div class="page-header">
       <div>
         <h1>Dashboard</h1>
-        <div class="sub">Item master is live. Batches, purchases, sales and prescriptions are coming next.</div>
+        <div class="sub">Today's snapshot — sales, stock, and what needs attention.</div>
       </div>
     </div>
+
+    <div class="quick-actions">
+      <a class="btn btn-primary" href="/sales.html">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+        New Sale
+      </a>
+      <a class="btn btn-primary" href="/purchases.html?new=1">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+        New Purchase (GRN)
+      </a>
+      <a class="btn btn-outline" href="/items.html">Add Item</a>
+      <a class="btn btn-outline" href="/batches.html">View Stock</a>
+    </div>
+
+    <div id="dashAlerts"></div>
 
     <div class="stat-grid">
       <div class="stat-card">
-        <div class="label">Total Items</div>
-        <div class="value" id="statTotalItems">—</div>
-        <div class="hint">Active in item master</div>
+        <div class="label">Today's Sales</div>
+        <div class="value" id="statTodaySales">—</div>
+        <div class="hint" id="statTodaySalesHint">Loading…</div>
       </div>
       <div class="stat-card">
-        <div class="label">Schedule H1 / X</div>
-        <div class="value accent" id="statScheduledItems">—</div>
-        <div class="hint">Require a prescription to sell</div>
+        <div class="label">Revenue This Month</div>
+        <div class="value" id="statMonthRevenue">—</div>
+        <div class="hint" id="statMonthRevenueHint">Loading…</div>
       </div>
       <div class="stat-card">
         <div class="label">Low / No Stock</div>
-        <div class="value" id="statLowStock">—</div>
+        <div class="value accent" id="statLowStock">—</div>
         <div class="hint">At or below reorder level</div>
       </div>
       <div class="stat-card">
-        <div class="label">Categories</div>
-        <div class="value" id="statCategories">—</div>
-        <div class="hint">Distinct item categories in use</div>
+        <div class="label">Expiring Soon</div>
+        <div class="value accent" id="statExpiring">—</div>
+        <div class="hint" id="statExpiringHint">Within 90 days</div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="flex-between" style="margin-bottom:14px;">
-        <strong style="color:var(--brand-900);font-family:var(--font-display);">Get started</strong>
+    <div class="dash-grid">
+      <div class="card">
+        <div class="flex-between" style="margin-bottom:12px;">
+          <strong style="color:var(--brand-900);font-family:var(--font-display);font-size:14px;">Expiring Soon</strong>
+          <a href="/reports.html?tab=expiry" style="font-size:12px;font-weight:700;">View full report →</a>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Item</th><th>Batch</th><th>Expiry</th><th>Status</th><th>Qty</th></tr></thead>
+            <tbody id="dashExpiryTbody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+          </table>
+        </div>
       </div>
-      <p class="muted" style="margin-bottom:10px;">Start by building out the item master — everything else (batches, GRN, POS, prescriptions) is keyed off it.</p>
-      <a class="btn btn-primary" href="/items.html">Go to Item Master →</a>
+
+      <div class="card">
+        <div class="flex-between" style="margin-bottom:12px;">
+          <strong style="color:var(--brand-900);font-family:var(--font-display);font-size:14px;">Low Stock</strong>
+          <a href="/reports.html?tab=lowstock" style="font-size:12px;font-weight:700;">View full report →</a>
+        </div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>Item</th><th>Stock</th><th>Reorder At</th></tr></thead>
+            <tbody id="dashLowStockTbody"><tr><td colspan="3" class="empty-state">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </main>
 </div>
@@ -109,26 +160,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/shell.js"></script>
-<script>
-(async function () {
-  const user = await initShell({ activeView: 'dashboard' });
-  if (!user) return;
-
-  try {
-    const items = await api.get('/api/items?include_inactive=1');
-    const active = items.filter(i => i.is_active);
-    const scheduled = active.filter(i => i.schedule === 'H1' || i.schedule === 'X');
-    const lowStock = active.filter(i => Number(i.total_stock) <= Number(i.reorder_level));
-    const categories = new Set(active.map(i => i.category).filter(Boolean));
-
-    document.getElementById('statTotalItems').textContent = active.length;
-    document.getElementById('statScheduledItems').textContent = scheduled.length;
-    document.getElementById('statLowStock').textContent = lowStock.length;
-    document.getElementById('statCategories').textContent = categories.size;
-  } catch (e) {
-    showToast(e.message, true);
-  }
-})();
-</script>
+<script src="/js/dashboard.js"></script>
 </body>
 </html>

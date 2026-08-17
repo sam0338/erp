@@ -16,10 +16,13 @@ restores stock without ever mutating the original invoice, the GST
 summary / expiry risk / low-stock / sales-register reports all read off
 that same data — net of returns — with CSV export, a doctor's accrued
 referral commission can be settled in one lump-sum payout with a full
-paid/unpaid audit trail, and an Admin can create additional branches and
-switch the active store for their session from the sidebar. What's left
-is a multi-installment distributor payment history — see "What's next"
-below.
+paid/unpaid audit trail, an Admin can create additional branches and
+switch the active store for their session from the sidebar, and the
+Dashboard is a real live snapshot — today's sales, this month's revenue,
+low-stock and expiring-soon counts with quick-action buttons to jump
+straight into a new sale or GRN, plus a persistent alert banner and a
+once-per-login popup surfacing what's expiring soon. What's left is a
+multi-installment distributor payment history — see "What's next" below.
 
 ## Quick start
 
@@ -190,6 +193,35 @@ the schema in ways that are painful to change later:
   (soft-delete, `is_active = 0`) is blocked if it's the last active store,
   or if any active user still has it as their home store — otherwise a
   switch or a login could silently land someone in a closed branch.
+- **The Dashboard is built entirely on existing report/list endpoints —
+  no new aggregation backend.** `public/js/dashboard.js` fetches
+  `/api/reports/low-stock`, `/api/reports/expiry?days=90`,
+  `/api/reports/sales-register` (defaults to this month), and
+  `/api/sales?from=<today>&to=<today>` in parallel via
+  `Promise.allSettled` (one slow/failed source degrades that one card to
+  "Could not load" instead of blanking the whole page) rather than
+  standing up a dedicated summary route that would just re-derive numbers
+  those routes already compute correctly (returns-aware revenue,
+  reorder-level math, expiry-status classification). The expiry
+  notification is two deliberately different mechanisms, not one: a
+  **persistent banner** on the dashboard body that shows on every visit
+  for as long as there's something to flag (the "notification" — you
+  can't miss it just by not being there the moment it first appeared),
+  and a **once-per-login popup** modal listing the actual near-expiry
+  batches, gated by a `sessionStorage.vedaJustLoggedIn` flag that
+  `login.html` sets right before redirecting and `dashboard.js` reads
+  once and clears — so it fires exactly on a fresh login, not on every
+  later sidebar click back to Dashboard (which would just be noise for
+  someone working the counter all day). The two "+ New Sale" / "+ New
+  Purchase" quick-action buttons are plain links to `/sales.html` (whose
+  New Sale tab is already the default view) and `/purchases.html?new=1`
+  — the latter's `?new=1` is read once by `purchases.js` on load to
+  auto-open the existing New GRN modal instead of landing on a plain
+  list, `history.replaceState`-d away immediately after so a page
+  refresh doesn't reopen it. `reports.html` similarly grew a `?tab=`
+  query param so the dashboard's "Review →" / "View full report" links
+  can deep-link straight into the Expiry or Low Stock tab instead of
+  always landing on GST Summary.
 
 ## Database schema
 

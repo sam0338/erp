@@ -180,6 +180,9 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       errorBox.style.display = 'block';
       return;
     }
+    // Consumed once by dashboard.js to show the near-expiry popup exactly
+    // on a fresh login, not on every later sidebar click back to Dashboard.
+    sessionStorage.setItem('vedaJustLoggedIn', '1');
     window.location.href = '/dashboard.html';
   } catch (err) {
     errorBox.textContent = 'Could not reach server. Is it running?';

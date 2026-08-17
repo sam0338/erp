@@ -17,6 +17,13 @@ const PAYMENT_BADGE = { Paid: 'badge-ok', Partial: 'badge-warn', Unpaid: 'badge-
 
   await loadDistributorFilterOptions();
   await loadPurchases();
+
+  // Dashboard's "+ New Purchase" quick-action links here with ?new=1 so the
+  // GRN modal opens immediately instead of landing on a plain list.
+  if (new URLSearchParams(location.search).get('new') === '1') {
+    openGrnModal();
+    history.replaceState(null, '', location.pathname); // don't reopen on refresh
+  }
 })();
 
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }

@@ -32,6 +32,13 @@ const STATUS_BADGE = { Completed: 'badge-ok', Cancelled: 'badge-danger', Returne
   document.getElementById('regExportBtn').addEventListener('click', exportRegisterCsv);
 
   await loadGst();
+
+  // Dashboard's expiry/low-stock alerts link here with ?tab=expiry etc. so
+  // the linked tab is what's showing, not always the default GST Summary.
+  const requestedTab = new URLSearchParams(location.search).get('tab');
+  if (requestedTab && ['expiry', 'lowstock', 'register'].includes(requestedTab)) {
+    switchTab(requestedTab);
+  }
 })();
 
 function switchTab(tab) {
