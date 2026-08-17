@@ -5,11 +5,13 @@ India — Node.js + Express + better-sqlite3 + plain HTML/JS frontend, no
 build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
-**Status: early scaffold.** The database schema covers the whole domain
-(items, batches, distributors, purchases/GRN, sales, prescriptions) and the
-**item master CRUD screens are live**. Batches/stock, purchases/GRN, the
-POS sale flow (with FEFO batch selection), and prescription capture are
-schema-ready but don't have routes/screens yet — see "What's next" below.
+**Status: early build.** The database schema covers the whole domain
+(items, batches, distributors, purchases/GRN, sales, prescriptions).
+**Item Master, Distributors, and Purchases/GRN are live** — receiving a
+GRN creates the `batches` rows automatically, so stock is real from here
+on. The POS sale flow (with FEFO batch selection) and prescription capture
+are schema-ready but don't have routes/screens yet — see "What's next"
+below.
 
 ## Quick start
 
@@ -52,8 +54,8 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `stores` | Branches/outlets (multi-store from day 1) |
 | `roles`, `users` | Admin / Pharmacist / Cashier / Accounts |
 | `items` | Shared item master — name, generic name, HSN, GST%, Schedule (OTC/H/H1/X), pack size, unit, reorder level |
-| `distributors` | Supplier ledger |
-| `purchases`, `purchase_items` | GRN header + lines; each line creates a `batches` row |
+| `distributors` | Supplier ledger — CRUD live, includes state (used for CGST/SGST vs IGST) |
+| `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction |
 | `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP |
 | `sales`, `sale_items` | POS invoices; each line records the exact FEFO-selected `batch_id` it was sold from |
 | `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales |
@@ -72,17 +74,18 @@ core of the POS sale route when that gets built.
 
 Roughly in the order it makes sense to build:
 
-1. **Distributors CRUD** — simple, unblocks purchases.
-2. **Purchases / GRN** — the route that turns a `purchase_items` line into
-   a `batches` row (this is where stock actually enters the system).
-3. **Batches & Stock view** — list batches per item/store, expiry alerts,
-   manual `stock_adjustments`.
-4. **POS / Sales** — the FEFO allocator, GST-split invoice totals
+1. **Batches & Stock view** — list batches per item/store, expiry alerts,
+   manual `stock_adjustments`. (Batches already exist and accumulate
+   correctly from GRN — this is just the read/adjust UI on top.)
+2. **POS / Sales** — the FEFO allocator, GST-split invoice totals
    (CGST/SGST/IGST), and the H1/X gate that requires a `prescriptions`
    row before the sale can complete.
-5. **Prescriptions** — the `multer` upload endpoint for the Rx photo
+3. **Prescriptions** — the `multer` upload endpoint for the Rx photo
    (`uploads/rx/`, gitignored) plus a lightweight register/search view.
-6. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
+4. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
+5. **Distributor ledger** — payment history/statement view; `PUT
+   /api/purchases/:id/payment` already records payments, this just
+   surfaces them per distributor.
 
 ## Licensing (7-day trial, then license required)
 
@@ -121,9 +124,9 @@ veda-pharmacy/
 │   ├── auth.js              # session gate (requireAuth, requireRole)
 │   └── license.js           # trial/license gate
 ├── routes/
-│   ├── auth.js, license.js, items.js
+│   ├── auth.js, license.js, items.js, distributors.js, purchases.js
 ├── utils/
-│   ├── helpers.js           # logActivity
+│   ├── helpers.js           # logActivity, generateGrnNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
 ├── public/                  # static frontend — one HTML page per module + shared shell.js/api.js/style.css
 ├── license-tool/            # VENDOR-ONLY key generator — never ship this folder

@@ -3,11 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VEDA Pharmacy</title>
+<title>Purchases / GRN — VEDA Pharmacy</title>
 <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
+<style>
+  .line-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .line-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); padding: 6px 6px; border-bottom: 1px solid var(--line); }
+  .line-table td { padding: 5px 6px; vertical-align: top; }
+  .line-table input, .line-table select { width: 100%; padding: 6px 7px; border: 1px solid var(--line); border-radius: 5px; font-size: 12.5px; }
+  .line-table .line-readout { font-size: 12.5px; padding: 6px 2px; white-space: nowrap; }
+  .line-table .rm-row-btn { background: none; border: none; color: var(--danger); font-size: 16px; line-height: 1; padding: 4px; }
+  .grn-totals { display: flex; justify-content: flex-end; }
+  .grn-totals table { border-collapse: collapse; }
+  .grn-totals td { padding: 4px 10px; font-size: 13px; }
+  .grn-totals td:first-child { color: var(--ink-soft); text-align: right; }
+  .grn-totals td:last-child { text-align: right; font-family: var(--font-mono); min-width: 100px; }
+  .grn-totals tr.grand td { font-weight: 800; font-size: 14.5px; color: var(--brand-900); border-top: 1px solid var(--line); padding-top: 8px; }
+  .grn-modal .modal { max-width: 900px; }
+</style>
 </head>
 <body>
 <div id="trialBanner" style="display:none;"></div>
@@ -56,40 +71,43 @@
   <main class="main">
     <div class="page-header">
       <div>
-        <h1>Dashboard</h1>
-        <div class="sub">Item master is live. Batches, purchases, sales and prescriptions are coming next.</div>
+        <h1>Purchases / GRN</h1>
+        <div class="sub">Receiving stock from a distributor creates a batch for every line automatically.</div>
       </div>
+      <button class="btn btn-primary" id="newGrnBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+        New GRN
+      </button>
     </div>
 
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="label">Total Items</div>
-        <div class="value" id="statTotalItems">—</div>
-        <div class="hint">Active in item master</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Schedule H1 / X</div>
-        <div class="value accent" id="statScheduledItems">—</div>
-        <div class="hint">Require a prescription to sell</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Low / No Stock</div>
-        <div class="value" id="statLowStock">—</div>
-        <div class="hint">At or below reorder level</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Categories</div>
-        <div class="value" id="statCategories">—</div>
-        <div class="hint">Distinct item categories in use</div>
-      </div>
+    <div class="search-bar">
+      <select id="distributorFilter"><option value="">All Distributors</option></select>
+      <select id="paymentStatusFilter">
+        <option value="">All Payment Status</option>
+        <option value="Unpaid">Unpaid</option>
+        <option value="Partial">Partial</option>
+        <option value="Paid">Paid</option>
+      </select>
     </div>
 
-    <div class="card">
-      <div class="flex-between" style="margin-bottom:14px;">
-        <strong style="color:var(--brand-900);font-family:var(--font-display);">Get started</strong>
-      </div>
-      <p class="muted" style="margin-bottom:10px;">Start by building out the item master — everything else (batches, GRN, POS, prescriptions) is keyed off it.</p>
-      <a class="btn btn-primary" href="/items.html">Go to Item Master →</a>
+    <div class="card" style="padding:0;overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>GRN No.</th>
+            <th>Distributor</th>
+            <th>Invoice No.</th>
+            <th>Invoice Date</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th>Payment</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="purchasesTbody">
+          <tr><td colspan="8" class="empty-state">Loading purchases…</td></tr>
+        </tbody>
+      </table>
     </div>
   </main>
 </div>
@@ -99,26 +117,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/shell.js"></script>
-<script>
-(async function () {
-  const user = await initShell({ activeView: 'dashboard' });
-  if (!user) return;
-
-  try {
-    const items = await api.get('/api/items?include_inactive=1');
-    const active = items.filter(i => i.is_active);
-    const scheduled = active.filter(i => i.schedule === 'H1' || i.schedule === 'X');
-    const lowStock = active.filter(i => Number(i.total_stock) <= Number(i.reorder_level));
-    const categories = new Set(active.map(i => i.category).filter(Boolean));
-
-    document.getElementById('statTotalItems').textContent = active.length;
-    document.getElementById('statScheduledItems').textContent = scheduled.length;
-    document.getElementById('statLowStock').textContent = lowStock.length;
-    document.getElementById('statCategories').textContent = categories.size;
-  } catch (e) {
-    showToast(e.message, true);
-  }
-})();
-</script>
+<script src="/js/purchases.js"></script>
 </body>
 </html>

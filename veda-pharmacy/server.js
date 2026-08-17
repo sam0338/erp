@@ -48,6 +48,8 @@ app.use('/api/auth', require('./routes/auth'));
 
 // ---------- Protected API routes ----------
 app.use('/api/items', requireAuth, require('./routes/items'));
+app.use('/api/distributors', requireAuth, require('./routes/distributors'));
+app.use('/api/purchases', requireAuth, require('./routes/purchases'));
 
 // ---------- Static frontend ----------
 app.use(express.static(path.join(__dirname, 'public')));
