@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports — VEDA Pharmacy</title>
+<link rel="icon" type="image/x-icon" href="/img/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .report-controls { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 18px; }
+  .report-controls .form-field { margin-bottom: 0; min-width: 150px; }
+  .gst-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 20px; }
+  .gst-card { background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 16px 18px; }
+  .gst-card h4 { font-family: var(--font-display); font-size: 13px; color: var(--brand-900); margin-bottom: 10px; }
+  .gst-card table { width: 100%; font-size: 12.5px; }
+  .gst-card td { padding: 3px 0; }
+  .gst-card td:last-child { text-align: right; font-family: var(--font-mono); }
+  .gst-card.net .value { font-family: var(--font-display); font-size: 22px; font-weight: 800; color: var(--brand-900); }
+  .gst-card.net .value.negative { color: var(--danger); }
+  .report-note { font-size: 11.5px; color: var(--ink-soft); margin-top: -8px; margin-bottom: 18px; }
+  tfoot td { font-weight: 700; border-top: 2px solid var(--line); padding-top: 10px; }
+</style>
+</head>
+<body>
+<div id="trialBanner" style="display:none;"></div>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">VEDA<small>Pharmacy</small></div>
+    <div class="store-tag" id="storeTag">Loading store…</div>
+
+    <div class="nav-group">
+      <div class="nav-label">Overview</div>
+      <a class="nav-item" data-href="dashboard" href="/dashboard.html"><span class="dot"></span>Dashboard</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Catalog</div>
+      <a class="nav-item" data-href="items" href="/items.html"><span class="dot"></span>Item Master</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Inventory</div>
+      <a class="nav-item" data-href="batches" href="/batches.html"><span class="dot"></span>Batches &amp; Stock</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Purchases</div>
+      <a class="nav-item" data-href="distributors" href="/distributors.html"><span class="dot"></span>Distributors</a>
+      <a class="nav-item" data-href="purchases" href="/purchases.html"><span class="dot"></span>Purchases / GRN</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Sales</div>
+      <a class="nav-item" data-href="sales" href="/sales.html"><span class="dot"></span>POS / Sales</a>
+      <a class="nav-item" data-href="prescriptions" href="/prescriptions.html"><span class="dot"></span>Prescriptions</a>
+      <a class="nav-item" data-href="doctors" href="/doctors.html"><span class="dot"></span>Doctors</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Insights</div>
+      <a class="nav-item" data-href="reports" href="/reports.html"><span class="dot"></span>Reports</a>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="name" id="userName">—</span>
+        <span class="role" id="userRole">—</span>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1>Reports</h1>
+        <div class="sub">GST summary, expiry risk, low stock, and the sales register.</div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="gst">GST Summary</button>
+      <button class="tab-btn" data-tab="expiry">Expiry Report</button>
+      <button class="tab-btn" data-tab="lowstock">Low Stock</button>
+      <button class="tab-btn" data-tab="register">Sales Register</button>
+    </div>
+
+    <!-- ---------------- GST Summary ---------------- -->
+    <div id="gstTab">
+      <div class="report-controls">
+        <div class="form-field"><label>From</label><input type="date" id="gstFrom"></div>
+        <div class="form-field"><label>To</label><input type="date" id="gstTo"></div>
+        <button class="btn btn-outline" id="gstExportBtn">Export CSV</button>
+      </div>
+      <p class="report-note">Output tax = GST collected on Completed sales. Input tax = GST paid on purchases received. Net payable is a simplified estimate for reference only — not a substitute for your actual GSTR filing.</p>
+      <div class="gst-grid" id="gstCards">
+        <div class="card empty-state" style="grid-column:1/-1;">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ---------------- Expiry Report ---------------- -->
+    <div id="expiryTab" style="display:none;">
+      <div class="report-controls">
+        <div class="form-field">
+          <label>Within</label>
+          <select id="expiryDays">
+            <option value="30">30 days</option>
+            <option value="60">60 days</option>
+            <option value="90" selected>90 days</option>
+            <option value="180">180 days</option>
+          </select>
+        </div>
+        <button class="btn btn-outline" id="expiryExportBtn">Export CSV</button>
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>Item</th><th>Batch No.</th><th>Expiry</th><th>Status</th><th>Qty</th><th>Value (Cost)</th><th>Value (MRP)</th></tr>
+          </thead>
+          <tbody id="expiryTbody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+          <tfoot id="expiryTfoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- ---------------- Low Stock ---------------- -->
+    <div id="lowstockTab" style="display:none;">
+      <div class="report-controls">
+        <button class="btn btn-outline" id="lowstockExportBtn">Export CSV</button>
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>Item</th><th>Category</th><th>Current Stock</th><th>Reorder Level</th><th>Qty to Reorder Level</th></tr>
+          </thead>
+          <tbody id="lowstockTbody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ---------------- Sales Register ---------------- -->
+    <div id="registerTab" style="display:none;">
+      <div class="report-controls">
+        <div class="form-field"><label>From</label><input type="date" id="regFrom"></div>
+        <div class="form-field"><label>To</label><input type="date" id="regTo"></div>
+        <button class="btn btn-outline" id="regExportBtn">Export CSV</button>
+      </div>
+      <div class="stat-grid" id="regSummary"></div>
+      <div class="card" style="padding:0;overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th></tr>
+          </thead>
+          <tbody id="registerTbody"><tr><td colspan="7" class="empty-state">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="modalRoot"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/shell.js"></script>
+<script src="/js/reports.js"></script>
+</body>
+</html>

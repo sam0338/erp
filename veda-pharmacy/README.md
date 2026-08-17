@@ -5,14 +5,15 @@ India — Node.js + Express + better-sqlite3 + plain HTML/JS frontend, no
 build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
-**Status: every table in the original schema now has a screen.** Item
-Master, Distributors, Purchases/GRN, Batches & Stock, POS/Sales, and
-Prescriptions are all live — a GRN creates batches, POS sells against them
-FEFO (oldest expiry first, splitting across lots automatically), a sale
-with a Schedule H1/X item is blocked until a prescription is captured, and
-that prescription — plus a photo of the physical Rx slip — is searchable
-in its own register. What's left is reporting, a distributor ledger view,
-and partial-line sale returns — see "What's next" below.
+**Status: full operational loop + reporting.** Item Master, Distributors,
+Purchases/GRN, Batches & Stock, POS/Sales, Prescriptions, Doctors, and
+Reports are all live — a GRN creates batches, POS sells against them FEFO
+(oldest expiry first, splitting across lots automatically), a sale with a
+Schedule H1/X item is blocked until a prescription is captured, and the
+GST summary / expiry risk / low-stock / sales-register reports all read
+off that same data with CSV export. What's left is a distributor ledger
+view, partial-line sale returns, and a multi-store switcher UI — see
+"What's next" below.
 
 ## Quick start
 
@@ -113,6 +114,17 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `activity_log` | Audit trail |
 | `license_state` | Single-row trial/license record |
 
+**Reports** (`routes/reports.js`, no new tables — all four read off the
+tables above) cover GST summary (output tax from Completed sales vs input
+tax from purchases, in a date range, with a simplified net-payable
+estimate explicitly labeled as a reference figure, not a GSTR substitute),
+an expiry-risk report (batches expiring within N days including
+already-expired ones, valued at both cost and MRP), low stock (active
+items at or below `reorder_level`, with quantity needed to reach it), and
+a sales register (date-ranged sales with payment-mode totals, Completed
+vs Cancelled broken out — cancelled sales are excluded from every total).
+Each report exports to CSV client-side.
+
 **FEFO (first-expiry-first-out)** batch selection is application logic, not
 a DB feature: `allocateFefo()` in `routes/sales.js` queries `batches` for
 an `(item_id, store_id)` with `quantity > 0 AND expiry_date >= date('now')`
@@ -125,19 +137,18 @@ deduction, so there's no race with a concurrent sale.
 
 ## What's next (not built yet)
 
-1. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
-2. **Distributor ledger** — payment history/statement view; `PUT
+1. **Distributor ledger** — payment history/statement view; `PUT
    /api/purchases/:id/payment` already records payments, this just
    surfaces them per distributor.
-3. **Sale returns** — `sales.status` already has a `Returned` value in its
+2. **Sale returns** — `sales.status` already has a `Returned` value in its
    CHECK constraint and `PUT /api/sales/:id/cancel` shows the restore-stock
    pattern to follow, but a partial-line return isn't implemented — only
    a full-sale cancel.
-4. **Multi-store UI** — the schema has supported multiple stores since day
+3. **Multi-store UI** — the schema has supported multiple stores since day
    one and every query is already `store_id`-scoped, but there's no
    store-switcher in the UI yet; every user is just pinned to the store
    they were seeded/created under.
-5. **Commission payout tracking** — `doctors` shows commission *accrued*
+4. **Commission payout tracking** — `doctors` shows commission *accrued*
    (per doctor, per sale, excluding cancelled sales), but there's no
    "mark as paid" flow yet the way `purchases`/distributors have one.
    Would follow the same `amount_paid`/`payment_status` pattern as
@@ -180,7 +191,7 @@ veda-pharmacy/
 │   ├── auth.js              # session gate (requireAuth, requireRole)
 │   └── license.js           # trial/license gate
 ├── routes/
-│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js, doctors.js
+│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js, doctors.js, reports.js
 ├── utils/
 │   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
