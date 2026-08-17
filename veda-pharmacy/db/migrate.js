@@ -27,8 +27,27 @@ function migrate(db) {
   ).get();
   if (!hasStores) return;
 
-  // No migrations yet — add ensureColumn(...)/ensureTable(...) calls here
-  // as the schema evolves after launch.
+  // Doctors registry + patient incentive / doctor commission tracking on sales
+  ensureTable(db, 'doctors', `
+    CREATE TABLE doctors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      phone TEXT,
+      registration_no TEXT,
+      default_commission_pct REAL NOT NULL DEFAULT 0,
+      notes TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+  ensureColumn(db, 'prescriptions', 'doctor_id', 'INTEGER REFERENCES doctors(id)');
+  ensureColumn(db, 'sales', 'patient_incentive_pct', 'REAL NOT NULL DEFAULT 0');
+  ensureColumn(db, 'sales', 'patient_incentive_amount', 'REAL NOT NULL DEFAULT 0');
+  ensureColumn(db, 'sales', 'doctor_id', 'INTEGER REFERENCES doctors(id)');
+  ensureColumn(db, 'sales', 'doctor_commission_pct', 'REAL NOT NULL DEFAULT 0');
+  ensureColumn(db, 'sales', 'doctor_commission_amount', 'REAL NOT NULL DEFAULT 0');
+  // CREATE INDEX IF NOT EXISTS is already idempotent — no ensureTable wrapper needed.
+  db.exec('CREATE INDEX IF NOT EXISTS idx_sales_doctor ON sales(doctor_id)');
 }
 
 module.exports = { migrate, ensureColumn, ensureTable };

@@ -73,6 +73,10 @@ function validateSaleBody(body) {
   if (body.payment_mode && !['Cash', 'UPI', 'Card', 'Credit'].includes(body.payment_mode)) {
     return 'Invalid payment_mode';
   }
+  if (body.patient_incentive_pct !== undefined) {
+    const pct = parseFloat(body.patient_incentive_pct);
+    if (isNaN(pct) || pct < 0 || pct > 100) return 'patient_incentive_pct must be between 0 and 100';
+  }
   return null;
 }
 
@@ -101,7 +105,11 @@ router.get('/', (req, res) => {
 
 // GET /api/sales/:id - header + line items + prescription (if any)
 router.get('/:id', (req, res) => {
-  const sale = db.prepare('SELECT * FROM sales WHERE id = ? AND store_id = ?').get(req.params.id, req.session.storeId);
+  const sale = db.prepare(`
+    SELECT s.*, d.name AS doctor_name
+    FROM sales s LEFT JOIN doctors d ON s.doctor_id = d.id
+    WHERE s.id = ? AND s.store_id = ?
+  `).get(req.params.id, req.session.storeId);
   if (!sale) return res.status(404).json({ error: 'Sale not found' });
 
   const items = db.prepare(`
@@ -158,7 +166,9 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
   `);
   const updateSaleTotals = db.prepare(`
     UPDATE sales SET taxable_amount = ?, cgst_amount = ?, sgst_amount = ?,
-      discount_amount = ?, round_off = ?, total_amount = ?
+      discount_amount = ?, patient_incentive_pct = ?, patient_incentive_amount = ?,
+      round_off = ?, total_amount = ?,
+      doctor_id = ?, doctor_commission_pct = ?, doctor_commission_amount = ?
     WHERE id = ?
   `);
   const insertSaleItem = db.prepare(`
@@ -168,10 +178,19 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
   `);
   const insertPrescription = db.prepare(`
-    INSERT INTO prescriptions (patient_name, patient_age, patient_gender, doctor_name, doctor_reg_no, rx_ref_no, rx_date, notes, created_by_user_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO prescriptions (patient_name, patient_age, patient_gender, doctor_name, doctor_id, doctor_reg_no, rx_ref_no, rx_date, notes, created_by_user_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const decrementBatch = db.prepare('UPDATE batches SET quantity = quantity - ? WHERE id = ?');
+
+  // A prescribing doctor only accrues commission when they're a registered,
+  // active row in the doctors table — see the note on that table in
+  // db/schema.sql. Free-typing a name on the Rx panel that doesn't match a
+  // registered doctor (prescriptionInput.doctor_id absent) accrues nothing.
+  let referredDoctor = null;
+  if (prescriptionInput && prescriptionInput.doctor_id) {
+    referredDoctor = db.prepare('SELECT * FROM doctors WHERE id = ? AND is_active = 1').get(prescriptionInput.doctor_id) || null;
+  }
 
   try {
     const saleId = db.transaction(() => {
@@ -180,6 +199,7 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
         const pInfo = insertPrescription.run(
           prescriptionInput.patient_name.trim(), prescriptionInput.patient_age || null,
           prescriptionInput.patient_gender || null, prescriptionInput.doctor_name.trim(),
+          referredDoctor ? referredDoctor.id : null,
           prescriptionInput.doctor_reg_no || null, prescriptionInput.rx_ref_no || null,
           prescriptionInput.rx_date || null, prescriptionInput.notes || null, req.session.userId
         );
@@ -227,11 +247,29 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
       const sgstAmount = round2(lineTotals.reduce((s, l) => s + l.sgst, 0));
       const grossSum = round2(lineTotals.reduce((s, l) => s + l.gross, 0));
       const discountAmount = round2(parseFloat(req.body.discount_amount) || 0);
-      const beforeRounding = grossSum - discountAmount;
+
+      // Patient loyalty/incentive discount — a % of the gross, same
+      // reduces-what-the-patient-pays treatment as discount_amount, just
+      // tracked as its own figure so reporting can tell the two apart.
+      const patientIncentivePct = round2(parseFloat(req.body.patient_incentive_pct) || 0);
+      const patientIncentiveAmount = round2(grossSum * patientIncentivePct / 100);
+
+      const beforeRounding = grossSum - discountAmount - patientIncentiveAmount;
       const totalAmount = Math.round(beforeRounding);
       const roundOff = round2(totalAmount - beforeRounding);
 
-      updateSaleTotals.run(taxableAmount, cgstAmount, sgstAmount, discountAmount, roundOff, totalAmount, newSaleId);
+      // Doctor commission is computed off the final total but — unlike the
+      // discount/incentive above — does NOT reduce it. The patient pays
+      // totalAmount either way; this is a separate liability the pharmacy
+      // owes the doctor, not visible on the customer's receipt math.
+      const doctorId = referredDoctor ? referredDoctor.id : null;
+      const doctorCommissionPct = referredDoctor ? referredDoctor.default_commission_pct : 0;
+      const doctorCommissionAmount = referredDoctor ? round2(totalAmount * doctorCommissionPct / 100) : 0;
+
+      updateSaleTotals.run(
+        taxableAmount, cgstAmount, sgstAmount, discountAmount, patientIncentivePct, patientIncentiveAmount,
+        roundOff, totalAmount, doctorId, doctorCommissionPct, doctorCommissionAmount, newSaleId
+      );
 
       return newSaleId;
     })();

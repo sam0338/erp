@@ -1,6 +1,7 @@
 // VEDA Pharmacy - POS / Sales
 let currentUser = null;
 let itemsCache = [];
+let doctorsCache = [];
 let cart = []; // { item_id, name, unit, schedule, gst_rate, quantity, discount_pct, previewMrp, previewStock, loading }
 let historyCache = [];
 
@@ -19,13 +20,27 @@ const STATUS_BADGE = { Completed: 'badge-ok', Cancelled: 'badge-danger', Returne
   const searchInput = document.getElementById('itemSearchInput');
   searchInput.addEventListener('input', debounce(runItemSearch, 150));
   searchInput.addEventListener('focus', runItemSearch);
+
+  const doctorInput = document.getElementById('rxDoctorName');
+  doctorInput.addEventListener('input', () => {
+    // Any manual edit invalidates a previously-selected doctor — otherwise
+    // typing over a selected name while keeping the hidden id would silently
+    // attribute commission to the wrong (or a since-edited-away) doctor.
+    document.getElementById('rxDoctorId').value = '';
+    document.getElementById('doctorCommissionHint').style.display = 'none';
+    runDoctorSearch();
+  });
+  doctorInput.addEventListener('focus', runDoctorSearch);
+
   document.addEventListener('click', (e) => {
     if (!e.target.closest('.item-search-wrap')) {
       document.getElementById('itemSearchResults').style.display = 'none';
+      document.getElementById('doctorSearchResults').style.display = 'none';
     }
   });
 
   document.getElementById('headerDiscount').addEventListener('input', recalcTotals);
+  document.getElementById('loyaltyDiscountPct').addEventListener('input', recalcTotals);
   document.getElementById('checkoutBtn').addEventListener('click', handleCheckout);
 
   document.getElementById('historySearch').addEventListener('input', debounce(loadHistory, 250));
@@ -36,6 +51,9 @@ const STATUS_BADGE = { Completed: 'badge-ok', Cancelled: 'badge-danger', Returne
   } catch (e) {
     showToast(e.message, true);
   }
+  try {
+    doctorsCache = await api.get('/api/doctors');
+  } catch (e) { /* doctor picker is best-effort — free-text name still works without it */ }
 })();
 
 function debounce(fn, ms) {
@@ -82,6 +100,43 @@ function runItemSearch() {
       });
     });
   }
+  resultsBox.style.display = 'block';
+}
+
+// ---------------- Doctor picker (Rx panel) ----------------
+// Selecting a result here is what makes a sale eligible for commission —
+// see the note on the doctors table in db/schema.sql. Typing a name that
+// doesn't match anything in the list is still a valid prescription (the
+// text field alone satisfies the H1/X gate), it just accrues no commission.
+
+function runDoctorSearch() {
+  const q = document.getElementById('rxDoctorName').value.trim().toLowerCase();
+  const resultsBox = document.getElementById('doctorSearchResults');
+  if (!q) { resultsBox.style.display = 'none'; return; }
+
+  const matches = doctorsCache.filter(d => d.name.toLowerCase().includes(q)).slice(0, 6);
+  if (matches.length === 0) {
+    resultsBox.style.display = 'none';
+    return;
+  }
+
+  resultsBox.innerHTML = matches.map(d => `
+    <div class="result-row" data-id="${d.id}">
+      ${escapeHtml(d.name)}
+      <span class="stock-hint">${d.default_commission_pct}% commission</span>
+    </div>
+  `).join('');
+  resultsBox.querySelectorAll('.result-row[data-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const doctor = doctorsCache.find(d => d.id === parseInt(row.dataset.id, 10));
+      document.getElementById('rxDoctorName').value = doctor.name; // no 'input' event on programmatic set — id below survives
+      document.getElementById('rxDoctorId').value = doctor.id;
+      const hint = document.getElementById('doctorCommissionHint');
+      hint.textContent = `Registered doctor — ${doctor.default_commission_pct}% commission will accrue on this sale.`;
+      hint.style.display = 'block';
+      resultsBox.style.display = 'none';
+    });
+  });
   resultsBox.style.display = 'block';
 }
 
@@ -173,12 +228,15 @@ function recalcTotals() {
     taxable += est.taxable; cgst += est.cgst; sgst += est.sgst; gross += est.gross;
   });
   const discount = parseFloat(document.getElementById('headerDiscount').value) || 0;
-  const total = Math.round(gross - discount);
+  const loyaltyPct = parseFloat(document.getElementById('loyaltyDiscountPct').value) || 0;
+  const loyaltyAmount = round2(gross * loyaltyPct / 100);
+  const total = Math.round(gross - discount - loyaltyAmount);
 
   document.getElementById('posTaxable').textContent = fmtMoney(taxable);
   document.getElementById('posCgst').textContent = fmtMoney(cgst);
   document.getElementById('posSgst').textContent = fmtMoney(sgst);
   document.getElementById('posDiscount').textContent = fmtMoney(discount);
+  document.getElementById('posLoyalty').textContent = fmtMoney(loyaltyAmount);
   document.getElementById('posGrand').textContent = fmtMoney(total);
 }
 
@@ -207,6 +265,7 @@ async function handleCheckout() {
       patient_age: document.getElementById('rxPatientAge').value || null,
       patient_gender: document.getElementById('rxPatientGender').value || null,
       doctor_name: doctorName,
+      doctor_id: document.getElementById('rxDoctorId').value || null,
       doctor_reg_no: document.getElementById('rxDoctorRegNo').value || null,
       rx_ref_no: document.getElementById('rxRefNo').value || null,
       rx_date: document.getElementById('rxDate').value || null
@@ -218,6 +277,7 @@ async function handleCheckout() {
     customer_phone: document.getElementById('customerPhone').value || null,
     payment_mode: document.getElementById('paymentMode').value,
     discount_amount: document.getElementById('headerDiscount').value || 0,
+    patient_incentive_pct: document.getElementById('loyaltyDiscountPct').value || 0,
     prescription,
     items: cart.map(l => ({ item_id: l.item_id, quantity: l.quantity, discount_pct: l.discount_pct }))
   };
@@ -242,11 +302,13 @@ function resetCart() {
   document.getElementById('customerName').value = '';
   document.getElementById('customerPhone').value = '';
   document.getElementById('headerDiscount').value = '0';
+  document.getElementById('loyaltyDiscountPct').value = '0';
   document.getElementById('paymentMode').value = 'Cash';
-  ['rxPatientName', 'rxPatientAge', 'rxDoctorName', 'rxDoctorRegNo', 'rxRefNo', 'rxDate'].forEach(id => {
+  ['rxPatientName', 'rxPatientAge', 'rxDoctorName', 'rxDoctorId', 'rxDoctorRegNo', 'rxRefNo', 'rxDate'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('rxPatientGender').value = '';
+  document.getElementById('doctorCommissionHint').style.display = 'none';
   renderCart();
 }
 
@@ -281,6 +343,7 @@ function showReceipt(sale) {
               <tr><td>Taxable</td><td>${fmtMoney(sale.taxable_amount)}</td></tr>
               <tr><td>CGST + SGST</td><td>${fmtMoney(sale.cgst_amount + sale.sgst_amount)}</td></tr>
               <tr><td>Discount</td><td>-${fmtMoney(sale.discount_amount)}</td></tr>
+              ${sale.patient_incentive_amount > 0 ? `<tr><td>Loyalty Discount</td><td>-${fmtMoney(sale.patient_incentive_amount)}</td></tr>` : ''}
               <tr class="grand"><td>Total</td><td>${fmtMoney(sale.total_amount)}</td></tr>
             </table>
           </div>
@@ -389,6 +452,7 @@ async function openHistoryDetail(id) {
               <tr><td>CGST</td><td>${fmtMoney(sale.cgst_amount)}</td></tr>
               <tr><td>SGST</td><td>${fmtMoney(sale.sgst_amount)}</td></tr>
               <tr><td>Discount</td><td>-${fmtMoney(sale.discount_amount)}</td></tr>
+              ${sale.patient_incentive_amount > 0 ? `<tr><td>Loyalty Discount (${sale.patient_incentive_pct}%)</td><td>-${fmtMoney(sale.patient_incentive_amount)}</td></tr>` : ''}
               <tr class="grand"><td>Total</td><td>${fmtMoney(sale.total_amount)}</td></tr>
             </table>
           </div>
@@ -402,6 +466,16 @@ async function openHistoryDetail(id) {
                 Doctor: <strong>${escapeHtml(sale.prescription.doctor_name)}</strong>${sale.prescription.doctor_reg_no ? ' (Reg. ' + escapeHtml(sale.prescription.doctor_reg_no) + ')' : ''}<br>
                 ${sale.prescription.rx_ref_no ? 'Rx Ref: ' + escapeHtml(sale.prescription.rx_ref_no) + '<br>' : ''}
                 ${sale.prescription.rx_date ? 'Rx Date: ' + fmtDate(sale.prescription.rx_date) : ''}
+              </div>
+            </div>
+          ` : ''}
+
+          ${sale.doctor_commission_amount > 0 ? `
+            <div class="divider"></div>
+            <div class="rx-panel">
+              <div class="rx-title">Doctor Commission (internal — not shown on customer receipt)</div>
+              <div style="font-size:12.5px;">
+                ${escapeHtml(sale.doctor_name || 'Doctor')}: <strong>${sale.doctor_commission_pct}%</strong> of ${fmtMoney(sale.total_amount)} = <strong>${fmtMoney(sale.doctor_commission_amount)}</strong>
               </div>
             </div>
           ` : ''}

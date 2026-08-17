@@ -103,6 +103,26 @@ CREATE TABLE IF NOT EXISTS items (
     updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- ---------- DOCTORS (referral commission registry) ----------
+-- Deliberately opt-in: a sale only accrues doctor_commission_amount (see
+-- SALES below) when the prescribing doctor is a row in this table with a
+-- commission rate set. Free-typing a doctor's name on the Rx panel at POS
+-- that doesn't match a registered doctor here accrues nothing — see the
+-- "Doctor commission" note in README.md's Architecture Decisions for the
+-- compliance context (India restricts referral commissions to doctors
+-- under NMC/MCI ethics regulations; this table exists because the
+-- operator asked for it after that was explicitly flagged to them).
+CREATE TABLE IF NOT EXISTS doctors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT,
+    registration_no TEXT,               -- medical council registration number
+    default_commission_pct REAL NOT NULL DEFAULT 0,  -- applied to a sale's total_amount, snapshotted onto the sale at checkout
+    notes TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
 -- ---------- PRESCRIPTIONS (Schedule H1/X sales) ----------
 -- One prescription per sale transaction — covers every H1/X line on that
 -- sale. Text reference fields plus an optional photo of the physical Rx
@@ -113,6 +133,7 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     patient_age INTEGER,
     patient_gender TEXT CHECK (patient_gender IN ('M','F','O') OR patient_gender IS NULL),
     doctor_name TEXT NOT NULL,
+    doctor_id INTEGER,                  -- set only if doctor_name was picked from the doctors registry (drives commission)
     doctor_reg_no TEXT,                 -- doctor's medical council registration number, if noted
     rx_ref_no TEXT,                     -- Rx slip/reference number, if the prescription has one
     rx_date TEXT,
@@ -120,6 +141,7 @@ CREATE TABLE IF NOT EXISTS prescriptions (
     notes TEXT,
     created_by_user_id INTEGER,
     created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (doctor_id) REFERENCES doctors(id),
     FOREIGN KEY (created_by_user_id) REFERENCES users(id)
 );
 
@@ -211,8 +233,14 @@ CREATE TABLE IF NOT EXISTS sales (
     sgst_amount REAL NOT NULL DEFAULT 0,
     igst_amount REAL NOT NULL DEFAULT 0,
     discount_amount REAL NOT NULL DEFAULT 0,
+    patient_incentive_pct REAL NOT NULL DEFAULT 0,     -- loyalty/incentive discount %, applied to gross like discount_amount
+    patient_incentive_amount REAL NOT NULL DEFAULT 0,  -- computed amount, kept separate from discount_amount for reporting
     round_off REAL NOT NULL DEFAULT 0,
     total_amount REAL NOT NULL DEFAULT 0,
+    doctor_id INTEGER,                  -- denormalized from prescriptions.doctor_id at checkout, for commission reporting
+    doctor_commission_pct REAL NOT NULL DEFAULT 0,     -- snapshot of doctors.default_commission_pct at time of sale —
+                                                        -- later rate changes must not alter historical accrued amounts
+    doctor_commission_amount REAL NOT NULL DEFAULT 0,  -- % of total_amount; does NOT reduce what the patient pays
     payment_mode TEXT NOT NULL DEFAULT 'Cash' CHECK (payment_mode IN ('Cash','UPI','Card','Credit')),
     payment_status TEXT NOT NULL DEFAULT 'Paid' CHECK (payment_status IN ('Paid','Partial','Unpaid')),
     status TEXT NOT NULL DEFAULT 'Completed' CHECK (status IN ('Completed','Returned','Cancelled')),
@@ -220,6 +248,7 @@ CREATE TABLE IF NOT EXISTS sales (
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (store_id) REFERENCES stores(id),
     FOREIGN KEY (prescription_id) REFERENCES prescriptions(id),
+    FOREIGN KEY (doctor_id) REFERENCES doctors(id),
     FOREIGN KEY (created_by_user_id) REFERENCES users(id),
     UNIQUE(store_id, invoice_no)
 );
@@ -280,6 +309,7 @@ CREATE INDEX IF NOT EXISTS idx_batches_expiry ON batches(expiry_date);
 CREATE INDEX IF NOT EXISTS idx_purchase_items_purchase ON purchase_items(purchase_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_store ON purchases(store_id);
 CREATE INDEX IF NOT EXISTS idx_sales_store_date ON sales(store_id, sale_date);
+CREATE INDEX IF NOT EXISTS idx_sales_doctor ON sales(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_sale ON sale_items(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_items_batch ON sale_items(batch_id);
 CREATE INDEX IF NOT EXISTS idx_stock_adjustments_batch ON stock_adjustments(batch_id);

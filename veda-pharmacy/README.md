@@ -63,6 +63,36 @@ the schema in ways that are painful to change later:
   scheme: a 7-day trial clock starts on `npm run initdb`, then
   `middleware/license.js` blocks every request until an Ed25519-signed
   license key is activated. See "Licensing" below.
+- **Doctor commission is opt-in per doctor, not automatic — and this needs
+  a compliance flag, not just an architecture note.** In India, the
+  National Medical Commission / Medical Council of India's ethics
+  regulations (Reg. 6.4) bar a registered doctor from receiving any
+  commission for referring patients to a specific pharmacy — this is
+  commonly called "cut practice" and is professional misconduct that can
+  cost a doctor their license. A per-sale commission tied to the
+  prescribing doctor is the textbook shape of that arrangement. **This was
+  flagged to the operator explicitly before being built, and they asked
+  for it anyway** — it's their business decision to make, not this
+  codebase's to block, but it's also not this codebase's place to pretend
+  the question never came up. What's actually built reflects that flag:
+  commission only accrues when the prescribing doctor is a row in the
+  `doctors` table with a rate set (`sales.doctor_id` is only populated
+  when `prescription.doctor_id` was explicitly selected from that
+  registry in the POS Rx panel) — free-typing any other doctor's name
+  accrues nothing. The commission also never reduces what the patient
+  pays (`total_amount` is computed before `doctor_commission_amount`) and
+  is deliberately excluded from the printable customer receipt, only
+  shown in the internal sale detail view. If you operate outside India,
+  or under a different arrangement (e.g. a doctor who is a formal salaried
+  consultant, not paid per-referral), your own applicable professional-
+  conduct and anti-kickback rules still govern what you configure here —
+  this app just tracks the number, it doesn't make the arrangement lawful.
+- **Patient loyalty/incentive discount is a plain per-sale percentage**,
+  not a persistent customer/points record — `sales.patient_incentive_pct`
+  and `.patient_incentive_amount` are just another discount lane, kept
+  separate from `discount_amount` so reporting can tell "why" a sale was
+  discounted. A real repeat-customer loyalty system (a `customers` table,
+  point balances, tiers) is a natural future addition but wasn't asked for.
 
 ## Database schema
 
@@ -76,9 +106,10 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `distributors` | Supplier ledger — CRUD live, includes state (used for CGST/SGST vs IGST) |
 | `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction |
 | `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP — viewable/searchable live, with expiry status (expired/near/ok) computed per row |
-| `sales`, `sale_items` | POS invoices — live; each line records the exact FEFO-selected `batch_id` it was sold from, split across lots automatically if one lot doesn't cover the quantity |
+| `sales`, `sale_items` | POS invoices — live; each line records the exact FEFO-selected `batch_id` it was sold from, split across lots automatically if one lot doesn't cover the quantity. Also carries the patient loyalty discount and (see Architecture Decisions) doctor commission fields, both snapshotted at checkout |
 | `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales — live end to end: text created inline by `POST /api/sales`, photo attached/replaced afterwards from the register, both searchable/viewable there |
 | `stock_adjustments` | Expiry write-off / damage / loss / correction, always reducing a batch's quantity — CRUD live from the Batches & Stock screen |
+| `doctors` | Referral commission registry — name, phone, registration no., default commission % — CRUD live, with a per-doctor commission history view |
 | `activity_log` | Audit trail |
 | `license_state` | Single-row trial/license record |
 
@@ -106,6 +137,11 @@ deduction, so there's no race with a concurrent sale.
    one and every query is already `store_id`-scoped, but there's no
    store-switcher in the UI yet; every user is just pinned to the store
    they were seeded/created under.
+5. **Commission payout tracking** — `doctors` shows commission *accrued*
+   (per doctor, per sale, excluding cancelled sales), but there's no
+   "mark as paid" flow yet the way `purchases`/distributors have one.
+   Would follow the same `amount_paid`/`payment_status` pattern as
+   `routes/purchases.js`'s `PUT /:id/payment` if it's needed.
 
 ## Licensing (7-day trial, then license required)
 
@@ -144,7 +180,7 @@ veda-pharmacy/
 │   ├── auth.js              # session gate (requireAuth, requireRole)
 │   └── license.js           # trial/license gate
 ├── routes/
-│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js
+│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js, doctors.js
 ├── utils/
 │   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
