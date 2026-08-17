@@ -93,6 +93,14 @@ function renderGst(d) {
         <tr><td>IGST</td><td>${fmtMoney(d.output.igst_amount)}</td></tr>
         <tr><td>Total</td><td>${fmtMoney(d.output.total_amount)}</td></tr>
       </table>
+      ${d.returns.count > 0 ? `
+        <div class="divider" style="margin:10px 0;"></div>
+        <table>
+          <tr><td>Returns (${d.returns.count})</td><td>-${fmtMoney(d.returns.total_amount)}</td></tr>
+          <tr style="font-weight:700;"><td>Net Taxable</td><td>${fmtMoney(d.output_net.taxable_amount)}</td></tr>
+          <tr style="font-weight:700;"><td>Net Total</td><td>${fmtMoney(d.output_net.total_amount)}</td></tr>
+        </table>
+      ` : ''}
     </div>
     <div class="gst-card">
       <h4>Input Tax — Purchases (${d.input.count})</h4>
@@ -107,7 +115,7 @@ function renderGst(d) {
     <div class="gst-card net">
       <h4>Net Tax Payable (est.)</h4>
       <div class="value ${netClass}">${fmtMoney(d.net_tax_payable_estimate)}</div>
-      <div class="muted" style="font-size:11.5px;margin-top:6px;">${d.net_tax_payable_estimate < 0 ? 'Input exceeds output — likely a credit position.' : 'Output exceeds input.'}</div>
+      <div class="muted" style="font-size:11.5px;margin-top:6px;">${d.net_tax_payable_estimate < 0 ? 'Input exceeds output — likely a credit position.' : 'Output exceeds input.'}${d.returns.count > 0 ? ' Already nets out returns processed in this period.' : ''}</div>
     </div>
   `;
 }
@@ -117,7 +125,9 @@ function exportGstCsv() {
   const d = gstCache;
   downloadCsv(`gst-summary-${d.from}-to-${d.to}.csv`, [
     ['Section', 'Count', 'Taxable', 'CGST', 'SGST', 'IGST', 'Total'],
-    ['Output (Sales)', d.output.count, d.output.taxable_amount, d.output.cgst_amount, d.output.sgst_amount, d.output.igst_amount, d.output.total_amount],
+    ['Output (Sales, gross)', d.output.count, d.output.taxable_amount, d.output.cgst_amount, d.output.sgst_amount, d.output.igst_amount, d.output.total_amount],
+    ['Returns (processed this period)', d.returns.count, -d.returns.taxable_amount, -d.returns.cgst_amount, -d.returns.sgst_amount, 0, -d.returns.total_amount],
+    ['Output (net of returns)', '', d.output_net.taxable_amount, d.output_net.cgst_amount, d.output_net.sgst_amount, d.output.igst_amount, d.output_net.total_amount],
     ['Input (Purchases)', d.input.count, d.input.taxable_amount, d.input.cgst_amount, d.input.sgst_amount, d.input.igst_amount, d.input.total_amount],
     [],
     ['Net Tax Payable (estimate)', d.net_tax_payable_estimate]
@@ -237,28 +247,46 @@ function renderRegister(d) {
     .map(([mode, amt]) => `${mode}: ${fmtMoney(amt)}`).join(' · ') || '—';
 
   summaryEl.innerHTML = `
-    <div class="stat-card"><div class="label">Completed Sales</div><div class="value">${d.completed_count}</div></div>
+    <div class="stat-card"><div class="label">Completed</div><div class="value">${d.completed_count}</div></div>
+    <div class="stat-card"><div class="label">Returned</div><div class="value">${d.returned_count}</div></div>
     <div class="stat-card"><div class="label">Cancelled</div><div class="value">${d.cancelled_count}</div></div>
-    <div class="stat-card"><div class="label">Net Total</div><div class="value accent">${fmtMoney(d.totals.total_amount)}</div></div>
+    <div class="stat-card"><div class="label">Gross Total</div><div class="value">${fmtMoney(d.totals.total_amount)}</div></div>
+    <div class="stat-card"><div class="label">Returns</div><div class="value" style="color:var(--danger);">-${fmtMoney(d.totals.returns_amount)}</div></div>
+    <div class="stat-card"><div class="label">Net Total</div><div class="value accent">${fmtMoney(d.totals.net_total_amount)}</div></div>
     <div class="stat-card"><div class="label">By Payment Mode</div><div class="hint" style="font-size:12px;margin-top:8px;">${paymentBreakdown}</div></div>
   `;
 
   const tbody = document.getElementById('registerTbody');
   if (d.sales.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No sales in this date range.</td></tr>';
-    return;
+  } else {
+    tbody.innerHTML = d.sales.map(s => `
+      <tr${s.status === 'Cancelled' ? ' style="opacity:0.55;"' : ''}>
+        <td class="mono">${escapeHtml(s.invoice_no)}</td>
+        <td>${fmtDate(s.sale_date)}</td>
+        <td>${escapeHtml(s.customer_name || '—')}</td>
+        <td>${s.item_count}</td>
+        <td>${fmtMoney(s.total_amount)}</td>
+        <td><span class="badge ${PAYMENT_BADGE[s.payment_status] || 'badge-neutral'}">${escapeHtml(s.payment_mode)}</span></td>
+        <td><span class="badge ${STATUS_BADGE[s.status] || 'badge-neutral'}">${escapeHtml(s.status)}</span></td>
+      </tr>
+    `).join('');
   }
-  tbody.innerHTML = d.sales.map(s => `
-    <tr${s.status === 'Cancelled' ? ' style="opacity:0.55;"' : ''}>
-      <td class="mono">${escapeHtml(s.invoice_no)}</td>
-      <td>${fmtDate(s.sale_date)}</td>
-      <td>${escapeHtml(s.customer_name || '—')}</td>
-      <td>${s.item_count}</td>
-      <td>${fmtMoney(s.total_amount)}</td>
-      <td><span class="badge ${PAYMENT_BADGE[s.payment_status] || 'badge-neutral'}">${escapeHtml(s.payment_mode)}</span></td>
-      <td><span class="badge ${STATUS_BADGE[s.status] || 'badge-neutral'}">${escapeHtml(s.status)}</span></td>
-    </tr>
-  `).join('');
+
+  const returnsTbody = document.getElementById('registerReturnsTbody');
+  if (d.returns.length === 0) {
+    returnsTbody.innerHTML = '<tr><td colspan="5" class="empty-state">None yet.</td></tr>';
+  } else {
+    returnsTbody.innerHTML = d.returns.map(r => `
+      <tr>
+        <td class="mono">${escapeHtml(r.return_no)}</td>
+        <td>${fmtDate(r.return_date)}</td>
+        <td class="mono">${escapeHtml(r.sale_invoice_no)}</td>
+        <td>${escapeHtml(r.reason || '—')}</td>
+        <td>${fmtMoney(r.refund_amount)}</td>
+      </tr>
+    `).join('');
+  }
 }
 
 function exportRegisterCsv() {
@@ -266,8 +294,15 @@ function exportRegisterCsv() {
   const rows = [['Invoice', 'Date', 'Customer', 'Items', 'Total', 'Payment Mode', 'Status']];
   registerCache.sales.forEach(s => rows.push([s.invoice_no, s.sale_date, s.customer_name || '', s.item_count, s.total_amount, s.payment_mode, s.status]));
   rows.push([]);
+  rows.push(['Returns']);
+  rows.push(['Return No.', 'Date', 'Sale Invoice', 'Reason', 'Refund']);
+  registerCache.returns.forEach(r => rows.push([r.return_no, r.return_date, r.sale_invoice_no, r.reason || '', r.refund_amount]));
+  rows.push([]);
   rows.push(['Completed', registerCache.completed_count]);
+  rows.push(['Returned', registerCache.returned_count]);
   rows.push(['Cancelled', registerCache.cancelled_count]);
-  rows.push(['Net Total', registerCache.totals.total_amount]);
+  rows.push(['Gross Total', registerCache.totals.total_amount]);
+  rows.push(['Returns Amount', registerCache.totals.returns_amount]);
+  rows.push(['Net Total', registerCache.totals.net_total_amount]);
   downloadCsv(`sales-register-${registerCache.from}-to-${registerCache.to}.csv`, rows);
 }

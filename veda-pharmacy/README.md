@@ -5,16 +5,18 @@ India — Node.js + Express + better-sqlite3 + plain HTML/JS frontend, no
 build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
-**Status: full operational loop + reporting + accounting + returns.** Item
-Master, Distributors (with a full ledger/statement view), Purchases/GRN,
-Batches & Stock, POS/Sales (including partial-line returns), Prescriptions,
-Doctors, and Reports are all live — a GRN creates batches, POS sells
-against them FEFO (oldest expiry first, splitting across lots
-automatically), a sale with a Schedule H1/X item is blocked until a
-prescription is captured, and the GST summary / expiry risk / low-stock /
-sales-register reports all read off that same data with CSV export.
-What's left is a multi-store switcher UI and commission payout tracking —
-see "What's next" below.
+**Status: full operational loop + reporting + accounting + returns
+(reflected end-to-end, including in reporting).** Item Master,
+Distributors (with a full ledger/statement view), Purchases/GRN, Batches &
+Stock, POS/Sales (including partial-line returns), Prescriptions, Doctors,
+and Reports are all live — a GRN creates batches, POS sells against them
+FEFO (oldest expiry first, splitting across lots automatically), a sale
+with a Schedule H1/X item is blocked until a prescription is captured, a
+return restores stock without ever mutating the original invoice, and the
+GST summary / expiry risk / low-stock / sales-register reports all read
+off that same data — net of returns — with CSV export. What's left is a
+multi-store switcher UI and commission payout tracking — see "What's
+next" below.
 
 ## Quick start
 
@@ -150,16 +152,27 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `activity_log` | Audit trail |
 | `license_state` | Single-row trial/license record |
 
-**Reports** (`routes/reports.js`, no new tables — all four read off the
-tables above) cover GST summary (output tax from Completed sales vs input
-tax from purchases, in a date range, with a simplified net-payable
-estimate explicitly labeled as a reference figure, not a GSTR substitute),
-an expiry-risk report (batches expiring within N days including
-already-expired ones, valued at both cost and MRP), low stock (active
-items at or below `reorder_level`, with quantity needed to reach it), and
-a sales register (date-ranged sales with payment-mode totals, Completed
-vs Cancelled broken out — cancelled sales are excluded from every total).
-Each report exports to CSV client-side.
+**Reports** (`routes/reports.js`) cover GST summary (output tax from
+Completed **and** Returned sales vs input tax from purchases, in a date
+range, with a simplified net-payable estimate explicitly labeled as a
+reference figure, not a GSTR substitute), an expiry-risk report (batches
+expiring within N days including already-expired ones, valued at both
+cost and MRP), low stock (active items at or below `reorder_level`, with
+quantity needed to reach it), and a sales register (date-ranged sales with
+payment-mode totals, Completed/Returned/Cancelled broken out). Each report
+exports to CSV client-side.
+
+**Returns net out of both the GST summary and sales register**, keyed to
+when the return was *processed*, not the original sale's date — the same
+treatment a real GST credit note gets (it reduces liability in the period
+it's issued, not retroactively amends the original period). A sale that
+was later returned still counts in that period's gross figures (it was a
+real, dated invoice); the return — wherever its date falls — is what nets
+it back out. A sale fully returned within the same reporting window
+correctly nets to zero on both reports; only a genuinely `Cancelled` sale
+(a void, not a completed-then-reversed one) is excluded from gross
+entirely. Verified all of this arithmetically against known test data,
+including the same-period-full-return edge case.
 
 **FEFO (first-expiry-first-out)** batch selection is application logic, not
 a DB feature: `allocateFefo()` in `routes/sales.js` queries `batches` for
@@ -184,10 +197,6 @@ deduction, so there's no race with a concurrent sale.
    ledger currently tracks one cumulative `amount_paid` per purchase, not
    a log of each individual part-payment. Would need a dedicated
    `distributor_payments` table if that granularity is ever needed.
-4. **Returns in reporting** — the Sales Register and GST Summary reports
-   still reflect gross sales; they don't currently net out `sale_returns`.
-   The data's all there (`refund_amount` per return, per sale) — just not
-   surfaced in `routes/reports.js` yet.
 
 ## Licensing (7-day trial, then license required)
 

@@ -13,16 +13,52 @@ function defaultDateRange(query) {
   return { from, to };
 }
 
+// Returns processed within [from, to] (by return_date, NOT the original
+// sale's date — matches how a GST credit note reduces liability in the
+// period it's issued, not retroactively amends the original sale's
+// period). taxable/cgst/sgst are derived proportionally from the
+// originating sale_items row (SUM(x * returned_qty / original_qty)) since
+// sale_return_items only stores the GST-inclusive refund_amount directly;
+// total_amount here IS that stored refund_amount (no need to re-derive
+// it — it's exact, unlike the proportional tax split which can drift by a
+// paisa or two from rounding, hence the round2() on the way out).
+function getReturnsSummary(storeId, from, to) {
+  const row = db.prepare(`
+    SELECT COUNT(DISTINCT sr.id) AS count,
+      COALESCE(SUM(si.taxable_amount * sri.quantity * 1.0 / si.quantity), 0) AS taxable_amount,
+      COALESCE(SUM(si.cgst_amount * sri.quantity * 1.0 / si.quantity), 0) AS cgst_amount,
+      COALESCE(SUM(si.sgst_amount * sri.quantity * 1.0 / si.quantity), 0) AS sgst_amount,
+      COALESCE(SUM(sri.refund_amount), 0) AS total_amount
+    FROM sale_return_items sri
+    JOIN sale_returns sr ON sri.sale_return_id = sr.id
+    JOIN sale_items si ON sri.sale_item_id = si.id
+    WHERE sr.store_id = ? AND date(sr.return_date) BETWEEN ? AND ?
+  `).get(storeId, from, to);
+
+  return {
+    count: row.count,
+    taxable_amount: round2(row.taxable_amount),
+    cgst_amount: round2(row.cgst_amount),
+    sgst_amount: round2(row.sgst_amount),
+    total_amount: round2(row.total_amount)
+  };
+}
+
 // GET /api/reports/gst-summary?from=YYYY-MM-DD&to=YYYY-MM-DD
-// Output tax (from Completed sales) vs input tax (from purchases received)
-// in the range, plus a simplified net-payable estimate. This is a
-// reference figure for the operator, NOT a substitute for an actual GSTR
-// filing — real GST set-off rules (head-wise CGST/SGST/IGST matching,
-// reverse charge, ITC eligibility) are more involved than a flat subtraction.
+// Output tax (Completed + Returned sales, net of any returns processed in
+// this same window) vs input tax (from purchases received), plus a
+// simplified net-payable estimate. This is a reference figure for the
+// operator, NOT a substitute for an actual GSTR filing — real GST set-off
+// rules (head-wise CGST/SGST/IGST matching, reverse charge, ITC
+// eligibility) are more involved than a flat subtraction.
 router.get('/gst-summary', (req, res) => {
   const { from, to } = defaultDateRange(req.query);
   const storeId = req.session.storeId;
 
+  // 'Returned' sales still count in gross output — the invoice legitimately
+  // happened in this period; the return (if it also falls in this window)
+  // nets it back out below. Only 'Cancelled' is excluded — that's a void,
+  // not a sale that happened and was later reversed.
   const output = db.prepare(`
     SELECT COUNT(*) AS count,
       COALESCE(SUM(taxable_amount), 0) AS taxable_amount,
@@ -31,8 +67,17 @@ router.get('/gst-summary', (req, res) => {
       COALESCE(SUM(igst_amount), 0) AS igst_amount,
       COALESCE(SUM(total_amount), 0) AS total_amount
     FROM sales
-    WHERE store_id = ? AND status = 'Completed' AND date(sale_date) BETWEEN ? AND ?
+    WHERE store_id = ? AND status IN ('Completed', 'Returned') AND date(sale_date) BETWEEN ? AND ?
   `).get(storeId, from, to);
+
+  const returns = getReturnsSummary(storeId, from, to);
+
+  const outputNet = {
+    taxable_amount: round2(output.taxable_amount - returns.taxable_amount),
+    cgst_amount: round2(output.cgst_amount - returns.cgst_amount),
+    sgst_amount: round2(output.sgst_amount - returns.sgst_amount),
+    total_amount: round2(output.total_amount - returns.total_amount)
+  };
 
   const input = db.prepare(`
     SELECT COUNT(*) AS count,
@@ -45,12 +90,14 @@ router.get('/gst-summary', (req, res) => {
     WHERE store_id = ? AND invoice_date BETWEEN ? AND ?
   `).get(storeId, from, to);
 
-  const outputTax = round2(output.cgst_amount + output.sgst_amount + output.igst_amount);
+  const outputTax = round2(outputNet.cgst_amount + outputNet.sgst_amount + output.igst_amount);
   const inputTax = round2(input.cgst_amount + input.sgst_amount + input.igst_amount);
 
   res.json({
     from, to,
     output,
+    returns,
+    output_net: outputNet,
     input,
     output_tax: outputTax,
     input_tax: inputTax,
@@ -125,10 +172,16 @@ router.get('/sales-register', (req, res) => {
     ORDER BY s.sale_date ASC
   `).all(storeId, from, to);
 
-  const completed = sales.filter(s => s.status === 'Completed');
-  const cancelled = sales.filter(s => s.status === 'Cancelled');
+  // 'Returned' sales are legitimate invoices that later came back — they
+  // still count toward gross totals here (the return list + returns_amount
+  // below is what nets it out), same reasoning as the GST summary above.
+  // Only 'Cancelled' (a void, not a completed-then-reversed sale) is excluded.
+  const valid = sales.filter(s => s.status !== 'Cancelled');
+  const completedCount = sales.filter(s => s.status === 'Completed').length;
+  const returnedCount = sales.filter(s => s.status === 'Returned').length;
+  const cancelledCount = sales.filter(s => s.status === 'Cancelled').length;
 
-  const totals = completed.reduce((acc, s) => {
+  const totals = valid.reduce((acc, s) => {
     acc.taxable_amount = round2(acc.taxable_amount + s.taxable_amount);
     acc.cgst_amount = round2(acc.cgst_amount + s.cgst_amount);
     acc.sgst_amount = round2(acc.sgst_amount + s.sgst_amount);
@@ -142,11 +195,27 @@ router.get('/sales-register', (req, res) => {
     patient_incentive_amount: 0, total_amount: 0, by_payment_mode: {}
   });
 
+  // Returns are keyed to when they were PROCESSED, not the original sale's
+  // date — a return this week against last month's sale reduces this
+  // week's net figures, not last month's (same as the GST summary).
+  const returnRows = db.prepare(`
+    SELECT sr.*, s.invoice_no AS sale_invoice_no
+    FROM sale_returns sr JOIN sales s ON sr.sale_id = s.id
+    WHERE sr.store_id = ? AND date(sr.return_date) BETWEEN ? AND ?
+    ORDER BY sr.return_date ASC
+  `).all(storeId, from, to);
+  const returnsAmount = round2(returnRows.reduce((s, r) => s + r.refund_amount, 0));
+
+  totals.returns_amount = returnsAmount;
+  totals.net_total_amount = round2(totals.total_amount - returnsAmount);
+
   res.json({
     from, to,
     sales,
-    completed_count: completed.length,
-    cancelled_count: cancelled.length,
+    returns: returnRows,
+    completed_count: completedCount,
+    returned_count: returnedCount,
+    cancelled_count: cancelledCount,
     totals
   });
 });
