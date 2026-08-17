@@ -230,7 +230,8 @@ CREATE TABLE IF NOT EXISTS sale_items (
     item_id INTEGER NOT NULL,
     batch_id INTEGER NOT NULL,          -- the specific FEFO-selected lot this line was sold from
     quantity INTEGER NOT NULL,
-    sale_rate REAL NOT NULL,            -- rate charged per unit, excl. tax (<= batch mrp)
+    sale_rate REAL NOT NULL,            -- rate charged per unit, GST-INCLUSIVE like mrp (<= batch mrp) —
+                                         -- taxable/cgst/sgst below are back-calculated out of this, not added on top
     mrp REAL NOT NULL,
     discount_pct REAL NOT NULL DEFAULT 0,
     gst_rate REAL NOT NULL DEFAULT 0,

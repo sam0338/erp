@@ -19,4 +19,16 @@ function generateGrnNo(db) {
   return `GRN-${year}-${seq}`;
 }
 
-module.exports = { logActivity, generateGrnNo };
+// INV-YYYY-00001, sequential per store within the calendar year (the
+// UNIQUE constraint on sales is (store_id, invoice_no), so numbering only
+// needs to be unique within a store, not globally).
+function generateInvoiceNo(db, storeId) {
+  const year = dayjs().format('YYYY');
+  const row = db.prepare(
+    `SELECT COUNT(*) as c FROM sales WHERE store_id = ? AND invoice_no LIKE ?`
+  ).get(storeId, `INV-${year}-%`);
+  const seq = String(row.c + 1).padStart(5, '0');
+  return `INV-${year}-${seq}`;
+}
+
+module.exports = { logActivity, generateGrnNo, generateInvoiceNo };

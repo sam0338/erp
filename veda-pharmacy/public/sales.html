@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POS / Sales — VEDA Pharmacy</title>
+<link rel="icon" type="image/x-icon" href="/img/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .pos-layout { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+  .cart-table th, .cart-table td { padding: 8px 8px; }
+  .cart-table input[type="number"] { width: 64px; padding: 5px 6px; border: 1px solid var(--line); border-radius: 5px; }
+  .cart-table .rm-btn { background: none; border: none; color: var(--danger); font-size: 16px; }
+  .item-search-wrap { position: relative; margin-bottom: 14px; }
+  .item-search-results {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+    background: var(--paper-raised); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow-md); max-height: 260px; overflow-y: auto; display: none;
+  }
+  .item-search-results .result-row { padding: 9px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--line); }
+  .item-search-results .result-row:last-child { border-bottom: none; }
+  .item-search-results .result-row:hover { background: var(--brand-100); }
+  .item-search-results .result-row .stock-hint { float: right; color: var(--ink-soft); font-size: 11.5px; }
+  .checkout-panel { position: sticky; top: 18px; }
+  .checkout-panel .grn-totals { display: block; }
+  .checkout-panel .grn-totals table { width: 100%; }
+  .checkout-panel .grn-totals td:first-child { text-align: left; }
+  .rx-panel { border: 1.5px solid var(--warn); background: var(--warn-bg); border-radius: var(--radius); padding: 12px 14px; margin: 14px 0; }
+  .rx-panel .rx-title { font-weight: 700; color: var(--warn); font-size: 12.5px; margin-bottom: 8px; }
+  @media print {
+    body * { visibility: hidden; }
+    #receiptPrintArea, #receiptPrintArea * { visibility: visible; }
+    #receiptPrintArea { position: absolute; top: 0; left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div id="trialBanner" style="display:none;"></div>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">VEDA<small>Pharmacy</small></div>
+    <div class="store-tag" id="storeTag">Loading store…</div>
+
+    <div class="nav-group">
+      <div class="nav-label">Overview</div>
+      <a class="nav-item" data-href="dashboard" href="/dashboard.html"><span class="dot"></span>Dashboard</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Catalog</div>
+      <a class="nav-item" data-href="items" href="/items.html"><span class="dot"></span>Item Master</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Inventory</div>
+      <a class="nav-item" data-href="batches" href="/batches.html"><span class="dot"></span>Batches &amp; Stock</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Purchases</div>
+      <a class="nav-item" data-href="distributors" href="/distributors.html"><span class="dot"></span>Distributors</a>
+      <a class="nav-item" data-href="purchases" href="/purchases.html"><span class="dot"></span>Purchases / GRN</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Sales</div>
+      <a class="nav-item" data-href="sales" href="/sales.html"><span class="dot"></span>POS / Sales</a>
+      <span class="nav-item" style="opacity:.4;cursor:default;"><span class="dot"></span>Prescriptions <span style="opacity:.7;font-weight:500;">(soon)</span></span>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="name" id="userName">—</span>
+        <span class="role" id="userRole">—</span>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1>POS / Sales</h1>
+        <div class="sub">Stock is drawn oldest-expiry-first automatically — you just pick the item and quantity.</div>
+      </div>
+    </div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="newsale">New Sale</button>
+      <button class="tab-btn" data-tab="history">Sales History</button>
+    </div>
+
+    <div id="newSaleTab">
+      <div class="pos-layout">
+        <div>
+          <div class="card">
+            <div class="item-search-wrap">
+              <input type="text" id="itemSearchInput" placeholder="Search item by name, generic name or HSN to add to cart…" autocomplete="off">
+              <div class="item-search-results" id="itemSearchResults"></div>
+            </div>
+
+            <table class="cart-table">
+              <thead>
+                <tr><th>Item</th><th>Available</th><th>Qty</th><th>Disc%</th><th>Est. Total</th><th></th></tr>
+              </thead>
+              <tbody id="cartTbody">
+                <tr><td colspan="6" class="empty-state">Search above to add items to the cart.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card checkout-panel">
+          <div class="form-field">
+            <label>Customer Name</label>
+            <input type="text" id="customerName" placeholder="Optional">
+          </div>
+          <div class="form-field">
+            <label>Customer Phone</label>
+            <input type="text" id="customerPhone" placeholder="Optional">
+          </div>
+          <div class="form-field">
+            <label>Payment Mode</label>
+            <select id="paymentMode">
+              <option value="Cash">Cash</option>
+              <option value="UPI">UPI</option>
+              <option value="Card">Card</option>
+              <option value="Credit">Credit</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Extra Discount (₹)</label>
+            <input type="number" id="headerDiscount" step="0.01" min="0" value="0">
+          </div>
+
+          <div id="rxPanel" class="rx-panel" style="display:none;">
+            <div class="rx-title">⚠ Prescription Required</div>
+            <div class="form-field" style="margin-bottom:8px;">
+              <label>Patient Name *</label>
+              <input type="text" id="rxPatientName">
+            </div>
+            <div class="form-grid" style="gap:8px;">
+              <div class="form-field" style="margin-bottom:8px;">
+                <label>Age</label>
+                <input type="number" id="rxPatientAge" min="0">
+              </div>
+              <div class="form-field" style="margin-bottom:8px;">
+                <label>Gender</label>
+                <select id="rxPatientGender">
+                  <option value="">—</option>
+                  <option value="M">M</option>
+                  <option value="F">F</option>
+                  <option value="O">O</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-field" style="margin-bottom:8px;">
+              <label>Doctor Name *</label>
+              <input type="text" id="rxDoctorName">
+            </div>
+            <div class="form-grid" style="gap:8px;">
+              <div class="form-field" style="margin-bottom:8px;">
+                <label>Doctor Reg. No.</label>
+                <input type="text" id="rxDoctorRegNo">
+              </div>
+              <div class="form-field" style="margin-bottom:8px;">
+                <label>Rx Ref No.</label>
+                <input type="text" id="rxRefNo">
+              </div>
+            </div>
+            <div class="form-field" style="margin-bottom:0;">
+              <label>Rx Date</label>
+              <input type="date" id="rxDate">
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="grn-totals">
+            <table>
+              <tr><td>Taxable Amount</td><td id="posTaxable">₹0.00</td></tr>
+              <tr><td>CGST</td><td id="posCgst">₹0.00</td></tr>
+              <tr><td>SGST</td><td id="posSgst">₹0.00</td></tr>
+              <tr><td>Discount</td><td id="posDiscount">₹0.00</td></tr>
+              <tr class="grand"><td>Total (est.)</td><td id="posGrand">₹0.00</td></tr>
+            </table>
+          </div>
+
+          <button class="btn btn-primary" id="checkoutBtn" style="width:100%;justify-content:center;margin-top:14px;">Complete Sale</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="historyTab" style="display:none;">
+      <div class="search-bar">
+        <input type="search" id="historySearch" placeholder="Search by customer name, phone or invoice no…">
+        <select id="historyPaymentFilter">
+          <option value="">All Payment Status</option>
+          <option value="Paid">Paid</option>
+          <option value="Partial">Partial</option>
+          <option value="Unpaid">Unpaid</option>
+        </select>
+      </div>
+      <div class="card" style="padding:0;overflow-x:auto;">
+        <table>
+          <thead>
+            <tr><th>Invoice No.</th><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody id="historyTbody">
+            <tr><td colspan="8" class="empty-state">Loading sales…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="modalRoot"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/shell.js"></script>
+<script src="/js/sales.js"></script>
+</body>
+</html>

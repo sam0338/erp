@@ -5,14 +5,15 @@ India — Node.js + Express + better-sqlite3 + plain HTML/JS frontend, no
 build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
-**Status: early build.** The database schema covers the whole domain
-(items, batches, distributors, purchases/GRN, sales, prescriptions).
-**Item Master, Distributors, Purchases/GRN, and Batches & Stock are live**
-— receiving a GRN creates `batches` rows automatically, and the Batches &
-Stock screen shows every lot with expiry alerts and lets you write off
-expired/damaged/lost stock. The POS sale flow (with FEFO batch selection)
-and prescription capture are schema-ready but don't have routes/screens
-yet — see "What's next" below.
+**Status: core loop is complete.** Item Master, Distributors, Purchases/GRN,
+Batches & Stock, and POS/Sales are all live — a GRN creates batches, the
+POS screen sells against them FEFO (oldest expiry first, splitting across
+lots automatically), and a sale with a Schedule H1/X item is blocked until
+a prescription (patient + doctor name, at minimum) is captured. What's left
+is a standalone Prescriptions register/search view (the data already gets
+captured inline at the point of sale — see "Architecture decisions"),
+photo upload for the Rx slip, reports, and a distributor ledger view — see
+"What's next" below.
 
 ## Quick start
 
@@ -40,7 +41,20 @@ the schema in ways that are painful to change later:
   `prescriptions` row (patient name, doctor name, Rx reference/date) and
   can optionally carry a photo of the physical Rx slip (`image_path`,
   uploaded via `multer`) for compliance. One prescription covers every
-  H1/X line on a single sale.
+  H1/X line on a single sale. The photo upload itself isn't wired up yet
+  (see "What's next") — today `POST /api/sales` creates the text-only
+  prescription row inline when the cart requires one.
+- **MRP is GST-inclusive at the POS counter — deliberately different math
+  from purchases.** Indian pharma MRP already includes tax, so a sale line
+  back-calculates taxable value and GST out of `qty × rate` (`tax = gross ×
+  gstRate / (100 + gstRate)`) instead of adding GST on top like a
+  distributor's purchase rate does (`routes/purchases.js`). Getting this
+  backwards would overcharge customers and misstate every GST return, so
+  it's called out explicitly in `routes/sales.js` (`computeInclusiveChunk`)
+  rather than left to be inferred from the purchase-side code next to it.
+  Retail sales are also assumed intra-state (CGST+SGST, no IGST) — a
+  walk-in counter sale doesn't carry a customer state the way a distributor
+  purchase does.
 - **Licensing is baked in from the start**, copied from VEDA Hotel PMS's
   scheme: a 7-day trial clock starts on `npm run initdb`, then
   `middleware/license.js` blocks every request until an Ed25519-signed
@@ -58,34 +72,36 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `distributors` | Supplier ledger — CRUD live, includes state (used for CGST/SGST vs IGST) |
 | `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction |
 | `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP — viewable/searchable live, with expiry status (expired/near/ok) computed per row |
-| `sales`, `sale_items` | POS invoices; each line records the exact FEFO-selected `batch_id` it was sold from |
-| `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales |
+| `sales`, `sale_items` | POS invoices — live; each line records the exact FEFO-selected `batch_id` it was sold from, split across lots automatically if one lot doesn't cover the quantity |
+| `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales — text capture live (created inline by `POST /api/sales`), photo upload not wired up yet |
 | `stock_adjustments` | Expiry write-off / damage / loss / correction, always reducing a batch's quantity — CRUD live from the Batches & Stock screen |
 | `activity_log` | Audit trail |
 | `license_state` | Single-row trial/license record |
 
 **FEFO (first-expiry-first-out)** batch selection is application logic, not
-a DB feature: query `batches` for an `(item_id, store_id)` with
-`quantity > 0` ordered by `expiry_date ASC`, and allocate across as many
-lots as needed to cover the sold quantity. The `idx_batches_fefo` index
-exists to make that query cheap, and `GET /api/batches` already returns
-batches in this order — the POS route just needs to walk that list and
-allocate. This isn't implemented yet — it's the core of the POS sale route
-when that gets built.
+a DB feature: `allocateFefo()` in `routes/sales.js` queries `batches` for
+an `(item_id, store_id)` with `quantity > 0 AND expiry_date >= date('now')`
+ordered by `expiry_date ASC`, and walks that list taking as much as it can
+from the soonest-expiring lot before spilling into the next one — so a
+single cart line can (and regularly will) become multiple `sale_items`
+rows against different batches. The `idx_batches_fefo` index exists to
+make that query cheap. Runs inside the same transaction as the stock
+deduction, so there's no race with a concurrent sale.
 
 ## What's next (not built yet)
 
-Roughly in the order it makes sense to build:
-
-1. **POS / Sales** — the FEFO allocator, GST-split invoice totals
-   (CGST/SGST/IGST), and the H1/X gate that requires a `prescriptions`
-   row before the sale can complete.
-2. **Prescriptions** — the `multer` upload endpoint for the Rx photo
-   (`uploads/rx/`, gitignored) plus a lightweight register/search view.
-3. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
-4. **Distributor ledger** — payment history/statement view; `PUT
+1. **Prescriptions register** — a standalone search/browse view over the
+   `prescriptions` table (creation already happens inline at POS), plus
+   the `multer` upload endpoint for the Rx photo (`uploads/rx/`,
+   gitignored) — schema and folder are ready, nothing serves it yet.
+2. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
+3. **Distributor ledger** — payment history/statement view; `PUT
    /api/purchases/:id/payment` already records payments, this just
    surfaces them per distributor.
+4. **Sale returns** — `sales.status` already has a `Returned` value in its
+   CHECK constraint and `PUT /api/sales/:id/cancel` shows the restore-stock
+   pattern to follow, but a partial-line return isn't implemented — only
+   a full-sale cancel.
 
 ## Licensing (7-day trial, then license required)
 
@@ -124,9 +140,9 @@ veda-pharmacy/
 │   ├── auth.js              # session gate (requireAuth, requireRole)
 │   └── license.js           # trial/license gate
 ├── routes/
-│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js
+│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js
 ├── utils/
-│   ├── helpers.js           # logActivity, generateGrnNo
+│   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
 ├── public/                  # static frontend — one HTML page per module + shared shell.js/api.js/style.css
 ├── license-tool/            # VENDOR-ONLY key generator — never ship this folder
