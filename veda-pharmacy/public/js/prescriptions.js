@@ -38,10 +38,13 @@ async function loadPrescriptions() {
 
 function renderTable(rows) {
   const tbody = document.getElementById('prescriptionsTbody');
+  const emptyState = document.getElementById('prescriptionsEmpty');
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No prescriptions recorded yet — they\'re captured automatically whenever a Schedule H1/X sale is rung up at POS.</td></tr>';
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
   tbody.innerHTML = rows.map(p => `
     <tr>
       <td>${fmtDate(p.created_at)}</td>
@@ -49,8 +52,8 @@ function renderTable(rows) {
       <td>${escapeHtml(p.doctor_name)}</td>
       <td class="mono">${escapeHtml(p.rx_ref_no || '—')}</td>
       <td class="mono">${escapeHtml(p.invoice_no)}</td>
-      <td>${p.image_path ? '<span class="badge badge-ok">On file</span>' : '<span class="badge badge-neutral">None</span>'}</td>
-      <td><button class="btn btn-outline btn-sm" onclick="openDetailModal(${p.id})">View</button></td>
+      <td>${p.image_path ? '<span class="badge badge-green">On file</span>' : '<span class="badge badge-slate">None</span>'}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openDetailModal(${p.id})">View</button></td>
     </tr>
   `).join('');
 }

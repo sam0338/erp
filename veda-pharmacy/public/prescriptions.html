@@ -10,12 +10,12 @@
 <link rel="stylesheet" href="/css/style.css">
 <style>
   .rx-photo-box {
-    width: 100%; max-width: 320px; border: 1px solid var(--line); border-radius: var(--radius);
-    background: var(--paper); display: flex; align-items: center; justify-content: center;
+    width: 100%; max-width: 320px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
     overflow: hidden; margin-bottom: 10px;
   }
   .rx-photo-box img { width: 100%; height: auto; display: block; }
-  .rx-photo-box.empty { height: 140px; color: var(--ink-soft); font-size: 12.5px; }
+  .rx-photo-box.empty { height: 140px; color: var(--slate); font-size: 12.5px; }
 </style>
 </head>
 <body>
@@ -70,36 +70,53 @@
     </div>
   </div>
   <div class="page-content">
-    <div class="page-header">
-      <div>
-        <h1>Prescriptions</h1>
-        <div class="sub">Every Schedule H1/X sale, with the patient/doctor record captured at checkout.</div>
+    <div class="section-header">
+      <div class="section-title">Prescriptions</div>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Every Schedule H1/X sale, with the patient/doctor record captured at checkout.</p>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-body">
+        <div class="filter-row" style="margin-bottom:0;">
+          <div class="search-wrap" style="flex:1;min-width:240px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="Search by patient name, doctor name or Rx ref no…">
+          </div>
+          <input type="date" id="fromDate" title="From date" style="width:160px;">
+          <input type="date" id="toDate" title="To date" style="width:160px;">
+        </div>
       </div>
     </div>
 
-    <div class="search-bar">
-      <input type="search" id="searchInput" placeholder="Search by patient name, doctor name or Rx ref no…">
-      <input type="date" id="fromDate" title="From date">
-      <input type="date" id="toDate" title="To date">
-    </div>
-
-    <div class="card" style="padding:0;overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Patient</th>
-            <th>Doctor</th>
-            <th>Rx Ref</th>
-            <th>Sale Invoice</th>
-            <th>Photo</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="prescriptionsTbody">
-          <tr><td colspan="7" class="empty-state">Loading prescriptions…</td></tr>
-        </tbody>
-      </table>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">📋 Register</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Patient</th>
+              <th>Doctor</th>
+              <th>Rx Ref</th>
+              <th>Sale Invoice</th>
+              <th>Photo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="prescriptionsTbody">
+            <tr><td colspan="7" class="empty-state">Loading prescriptions…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="prescriptionsEmpty" style="display:none;">
+        <div class="empty-state">
+          <div class="empty-icon">📋</div>
+          <h3>No prescriptions recorded yet</h3>
+          <p>They're captured automatically at POS checkout for Schedule H1/X items.</p>
+        </div>
+      </div>
     </div>
   </div>
 </div>
