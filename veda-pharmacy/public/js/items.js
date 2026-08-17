@@ -2,6 +2,8 @@
 let currentUser = null;
 let itemsCache = [];
 let categoriesCache = [];
+let managedCategoriesCache = []; // from /api/categories (public/categories.html) — merged into the item form's category datalist
+let storeDefaultGstRate = 12; // fallback shown in the Add Item form's GST% field until the store's Shop Settings value loads
 
 const SCHEDULE_BADGE = { OTC: 'badge-schedule-OTC', H: 'badge-schedule-H', H1: 'badge-schedule-H1', X: 'badge-schedule-X' };
 const SCHEDULE_LABEL = { OTC: 'OTC', H: 'Sch. H', H1: 'Sch. H1', X: 'Sch. X' };
@@ -20,8 +22,27 @@ const GST_RATES = [0, 5, 12, 18, 28];
   document.getElementById('includeInactive').addEventListener('change', loadItems);
 
   await loadCategories();
+  await loadManagedCategories();
   await loadItems();
+
+  try {
+    const store = await api.get(`/api/stores/${currentUser.storeId}`);
+    if (store && store.default_gst_rate !== undefined && store.default_gst_rate !== null) {
+      storeDefaultGstRate = store.default_gst_rate;
+    }
+  } catch (e) { /* non-fatal — keeps the hardcoded 12% fallback */ }
 })();
+
+// The managed Categories list (public/categories.html) — merged into the
+// item form's category datalist below alongside whatever free-text values
+// already exist on items, so newly-added categories show up as suggestions
+// immediately without forcing a hard select (items.category stays plain
+// TEXT — see the note in db/schema.sql on why there's no FK migration).
+async function loadManagedCategories() {
+  try {
+    managedCategoriesCache = await api.get('/api/categories');
+  } catch (e) { /* non-fatal — the datalist just falls back to existing item categories */ }
+}
 
 function debounce(fn, ms) {
   let t;
@@ -132,7 +153,7 @@ function openModal(id) {
               </div>
               <div class="form-field">
                 <label>GST %</label>
-                <input type="number" name="gst_rate" step="0.01" min="0" list="gstRates" value="${item.gst_rate !== undefined ? item.gst_rate : 12}">
+                <input type="number" name="gst_rate" step="0.01" min="0" list="gstRates" value="${item.gst_rate !== undefined ? item.gst_rate : storeDefaultGstRate}">
                 <datalist id="gstRates">${GST_RATES.map(r => `<option value="${r}">`).join('')}</datalist>
               </div>
               <div class="form-field">
@@ -163,7 +184,8 @@ function openModal(id) {
               <div class="form-field">
                 <label>Category</label>
                 <input type="text" name="category" list="categoryList" value="${escapeHtml(item.category || '')}" placeholder="e.g. Analgesic">
-                <datalist id="categoryList">${categoriesCache.map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
+                <datalist id="categoryList">${[...new Set([...managedCategoriesCache.map(c => c.name), ...categoriesCache])].map(c => `<option value="${escapeHtml(c)}">`).join('')}</datalist>
+                <div class="form-hint">Manage the list on the <a href="/categories.html">Categories</a> page.</div>
               </div>
               <div class="form-field">
                 <label>Rack Location</label>

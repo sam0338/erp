@@ -20,6 +20,8 @@ veda-hotel-pms/packaging/*.exe
 # VEDA Pharmacy
 veda-pharmacy/db/*.db
 veda-pharmacy/db/*.db-journal
+veda-pharmacy/db/*.db-wal
+veda-pharmacy/db/*.db-shm
 veda-pharmacy/.env
 veda-pharmacy/license-tool/license_private.pem
 veda-pharmacy/packaging/node/

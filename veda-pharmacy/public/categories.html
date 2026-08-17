@@ -3,26 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Purchases / GRN — VEDA Pharmacy</title>
+<title>Categories — VEDA Pharmacy</title>
 <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
-<style>
-  .line-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .line-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); padding: 6px 6px; border-bottom: 1px solid var(--line); }
-  .line-table td { padding: 5px 6px; vertical-align: top; }
-  .line-table input, .line-table select { width: 100%; padding: 6px 7px; border: 1px solid var(--line); border-radius: 5px; font-size: 12.5px; }
-  .line-table .line-readout { font-size: 12.5px; padding: 6px 2px; white-space: nowrap; }
-  .line-table .rm-row-btn { background: none; border: none; color: var(--danger); font-size: 16px; line-height: 1; padding: 4px; }
-  .grn-totals { display: flex; justify-content: flex-end; }
-  .grn-totals table { border-collapse: collapse; }
-  .grn-totals td { padding: 4px 10px; font-size: 13px; }
-  .grn-totals td:first-child { color: var(--ink-soft); text-align: right; }
-  .grn-totals td:last-child { text-align: right; font-family: var(--font-mono); min-width: 100px; }
-  .grn-totals tr.grand td { font-weight: 800; font-size: 14.5px; color: var(--brand-900); border-top: 1px solid var(--line); padding-top: 8px; }
-  .grn-modal .modal { max-width: 900px; }
-</style>
 </head>
 <body>
 <div id="trialBanner" style="display:none;"></div>
@@ -74,61 +59,33 @@
 
 <div id="main">
   <div class="topbar">
-    <div class="topbar-title">Purchases / GRN</div>
+    <div class="topbar-title">Categories</div>
     <div class="topbar-right">
       <div class="topbar-date" id="topbarDate"></div>
     </div>
   </div>
   <div class="page-content">
     <div class="section-header">
-      <div class="section-title">Purchases / GRN</div>
-      <button class="btn btn-primary" id="newGrnBtn">➕ New GRN</button>
+      <div class="section-title">Medicine Categories</div>
+      <button class="btn btn-primary" id="addCategoryBtn">➕ Add Category</button>
     </div>
-    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Receiving stock from a distributor creates a batch for every line automatically.</p>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">
+      Manages the picklist on the Item Master's Category field. Renaming or removing a category here doesn't
+      rewrite existing items — they keep whatever category text they already had.
+    </p>
 
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-body">
-        <div class="filter-row" style="margin-bottom:0;">
-          <select id="distributorFilter" style="width:220px;"><option value="">All Distributors</option></select>
-          <select id="paymentStatusFilter" style="width:180px;">
-            <option value="">All Payment Status</option>
-            <option value="Unpaid">Unpaid</option>
-            <option value="Partial">Partial</option>
-            <option value="Paid">Paid</option>
-          </select>
-        </div>
-      </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--slate);margin-bottom:14px;">
+      <input type="checkbox" id="includeInactive" style="width:auto;"> Show inactive
+    </label>
+
+    <div id="categoryGrid" class="stat-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));">
+      <div class="empty-state">Loading categories…</div>
     </div>
-
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">Goods received</span>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>GRN No.</th>
-              <th>Distributor</th>
-              <th>Invoice No.</th>
-              <th>Invoice Date</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Payment</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="purchasesTbody">
-            <tr><td colspan="8" class="empty-state">Loading purchases…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div id="purchasesEmpty" style="display:none;">
-        <div class="empty-state">
-          <div class="empty-icon">📥</div>
-          <h3>No purchases recorded yet</h3>
-          <p>Click "New GRN" to receive your first delivery.</p>
-        </div>
+    <div id="categoriesEmpty" style="display:none;">
+      <div class="empty-state">
+        <div class="empty-icon">🏷️</div>
+        <h3>No categories yet</h3>
+        <p>Add categories like Antibiotic, Analgesic, Cardiac… to organize the Item Master.</p>
       </div>
     </div>
   </div>
@@ -139,6 +96,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/shell.js"></script>
-<script src="/js/purchases.js"></script>
+<script src="/js/categories.js"></script>
 </body>
 </html>

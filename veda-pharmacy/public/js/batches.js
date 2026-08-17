@@ -3,7 +3,7 @@ let currentUser = null;
 let batchesCache = [];
 
 const EXPIRY_BADGE = { expired: 'badge-red', near: 'badge-amber', ok: 'badge-green' };
-const ADJUSTMENT_TYPES = ['Expired', 'Damaged', 'Lost', 'Correction'];
+const ADJUSTMENT_TYPES = ['Expired', 'Damaged', 'Lost', 'Correction', 'Return to Supplier', 'Sample'];
 
 (async function init() {
   currentUser = await initShell({ activeView: 'batches' });

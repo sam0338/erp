@@ -281,6 +281,82 @@ the schema in ways that are painful to change later:
   stragglers) was run as the final step specifically to catch this class
   of issue — a partial reskin is worse than no reskin, since it looks
   like an oversight rather than a deliberate choice.
+- **MediStore Pro feature parity: six of its screens/behaviors that VEDA
+  didn't have were built for real against VEDA's own backend, not just
+  visually referenced.** After the reskin above, the operator asked for
+  MediPro's actual feature set to be copied, not just its look, in five
+  named areas. What was built, and how each maps onto VEDA's existing
+  data model:
+  - **Purchase Orders** (`purchase_orders`, `purchase_order_items`,
+    `routes/purchase-orders.js`, `public/purchase-orders.html`) — a
+    genuinely separate concept from a GRN: a PO is a *request* out to a
+    distributor (Draft → Sent → Cancelled), a GRN (`routes/purchases.js`)
+    is the actual receipt. `purchases.purchase_order_id` is a nullable
+    link — receiving stays fully supported with no PO at all, exactly as
+    before, or against an open PO's still-pending quantity, partially or
+    in full, across as many GRNs as it takes. **"GRN status" (Pending /
+    Partial GRN / Fully Received) is deliberately never stored** — it's
+    computed on every read by comparing each line's `quantity_received`
+    to `quantity_ordered` (`computeGrnStatus()`), the same
+    recompute-from-source-rows principle used to fix the doctor-commission
+    clawback bug elsewhere in this codebase, so there's no second place
+    for that fact to go stale.
+  - **Shop Settings** (`public/settings.html`, eight new columns on
+    `stores`) — self-service shop profile/license/billing-preference
+    fields (tagline, owner name, FSSAI no., bill prefix, default GST%,
+    receipt footer), Admin-only, editing the operator's own current store
+    through the **existing** `PUT /api/stores/:id` endpoint rather than a
+    parallel settings-specific route — it's the same "update a store
+    record" operation Admin's Stores CRUD already does, just against
+    `req.session.storeId` instead of an arbitrary id. Two fields are
+    genuinely functional, not cosmetic: `bill_prefix` drives
+    `generateInvoiceNo()` (was hardcoded `INV-`), and `default_gst_rate`
+    pre-fills the Item Master's Add Item GST% field (was hardcoded 12).
+    **Deliberately excluded**: MediPro's Export All Data / Import Data /
+    Clear All Data (JSON) buttons — built for its browser-localStorage
+    backend, they don't map onto a relational database, and a "Clear All
+    Data" button in front of a live pharmacy's real SQL data would be an
+    unacceptable footgun rather than a convenience.
+  - **Categories** (`categories` table, `routes/categories.js`,
+    `public/categories.html`) — a managed, shared (not store-scoped) list
+    with icon/description and a live medicine-count per category, feeding
+    the Item Master's Category field as a datalist suggestion.
+    `items.category` deliberately stays plain `TEXT` with no FK — adding
+    one would mean migrating every existing item's free-text category
+    value against the new table's exact spelling, a real risk for no
+    functional gain; renaming/removing a category here never rewrites
+    items that already used the old text.
+  - **Item Movement Log** (`routes/movements.js`, `public/movements.html`)
+    — a unified, read-only, chronological ledger per item: GRN receipts
+    (in), sales (out), sale returns (in), manual stock adjustments (out).
+    Pure aggregation over `purchase_items`/`sale_items`/
+    `sale_return_items`/`stock_adjustments` at request time — nothing is
+    stored separately, so it can never drift from the records it reads.
+  - **Global Retrieve Bill / New Bill** (`injectTopbarActions()` in
+    `public/js/shell.js`) — MediPro's topbar search-any-invoice and
+    jump-to-a-fresh-sale shortcuts, injected into every page's topbar
+    rather than duplicated into all 14 page templates. Retrieve Bill reuses
+    the existing `GET /api/sales` filters (invoice/customer/phone/date
+    range/payment status); its result rows either open the POS page's own
+    History-tab detail view directly (if already on `sales.html`) or
+    navigate there with `?openSale=<id>`, which `sales.js` picks up on
+    load. New Bill resets the cart in place if already on the POS page,
+    otherwise navigates there.
+  - **Stock adjustment types extended** to match MediPro's list — 'Return
+    to Supplier' and 'Sample' joined the original Expired/Damaged/Lost/
+    Correction, rather than building MediPro's separate "Stock Out" page
+    as a duplicate of VEDA's existing adjustment feature (same concept,
+    different name). This required two changes in lockstep, both now
+    verified: SQLite `CHECK` constraints **are** enforced on every insert
+    against a table's already-stored schema (verified empirically, not
+    assumed) and can't be widened with a plain `ALTER TABLE`, so
+    `db/migrate.js` rebuilds `stock_adjustments` (new table with the wider
+    `CHECK`, copy rows across, drop, rename) for any pre-existing
+    install — and the route-level allow-list in `routes/batches.js` had
+    its own separate hardcoded four-value array that also needed updating
+    (caught by an end-to-end smoke test against a running server, not by
+    inspection — a `POST /api/batches/adjustments` with `'Sample'` came
+    back rejected even after the schema/migration fix alone).
 
 ## Database schema
 
@@ -292,15 +368,22 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `roles`, `users` | Admin / Pharmacist / Cashier / Accounts |
 | `items` | Shared item master — name, generic name, HSN, GST%, Schedule (OTC/H/H1/X), pack size, unit, reorder level |
 | `distributors` | Supplier ledger — CRUD live, includes state (used for CGST/SGST vs IGST), plus a full statement view (opening balance, every purchase/payment as a dated debit/credit, running balance) |
-| `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction |
+| `purchase_orders`, `purchase_order_items` | Requests out to a distributor (Draft/Sent/Cancelled) — CRUD live; "GRN status" is always derived (see Architecture Decisions), never stored |
+| `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction, and bumps the matching PO line's `quantity_received` if `purchase_order_id` is set |
 | `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP — viewable/searchable live, with expiry status (expired/near/ok) computed per row |
+| `categories` | Shared managed picklist (name/icon/description) for the Item Master's Category field — CRUD live |
 | `sales`, `sale_items` | POS invoices — live; each line records the exact FEFO-selected `batch_id` it was sold from, split across lots automatically if one lot doesn't cover the quantity. Also carries the patient loyalty discount and (see Architecture Decisions) doctor commission fields, both snapshotted at checkout |
 | `sale_returns`, `sale_return_items` | Partial-line returns against a Completed sale — live; restores stock to the originating batch and proportionally claws back any doctor commission, without ever mutating the original sale |
 | `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales — live end to end: text created inline by `POST /api/sales`, photo attached/replaced afterwards from the register, both searchable/viewable there |
-| `stock_adjustments` | Expiry write-off / damage / loss / correction, always reducing a batch's quantity — CRUD live from the Batches & Stock screen |
+| `stock_adjustments` | Expired / Damaged / Lost / Correction / Return to Supplier / Sample, always reducing a batch's quantity — CRUD live from the Batches & Stock screen |
 | `doctors`, `doctor_commission_payments` | Referral commission registry — name, phone, registration no., default commission % — CRUD live, with a per-doctor commission history view and a "Pay Out" action that settles all unpaid commission in one lump sum |
 | `activity_log` | Audit trail |
 | `license_state` | Single-row trial/license record |
+
+The Item Movement Log (`routes/movements.js`) and the eight Shop Settings
+columns added to `stores` (`tagline`, `owner_name`, `phone_alt`, `email`,
+`fssai_no`, `bill_prefix`, `default_gst_rate`, `invoice_footer`) aren't
+their own tables — see the MediStore Pro feature parity entry above.
 
 **Reports** (`routes/reports.js`) cover GST summary (output tax from
 Completed **and** Returned sales vs input tax from purchases, in a date
@@ -390,9 +473,11 @@ veda-pharmacy/
 │   ├── auth.js              # session gate (requireAuth, requireRole)
 │   └── license.js           # trial/license gate
 ├── routes/
-│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js, doctors.js, reports.js, stores.js
+│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, purchase-orders.js,
+│   │   batches.js, sales.js, prescriptions.js, doctors.js, reports.js, stores.js,
+│   │   categories.js, movements.js
 ├── utils/
-│   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo
+│   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo, generatePoNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
 ├── public/                  # static frontend — one HTML page per module + shared shell.js/api.js/style.css
 ├── license-tool/            # VENDOR-ONLY key generator — never ship this folder

@@ -4,6 +4,7 @@ let purchasesCache = [];
 let distributorsCache = [];
 let itemsCache = [];
 let rowSeq = 0;
+let activePo = null; // set when the GRN modal was opened to receive against a specific Purchase Order
 
 const PAYMENT_BADGE = { Paid: 'badge-green', Partial: 'badge-amber', Unpaid: 'badge-red' };
 
@@ -20,9 +21,15 @@ const PAYMENT_BADGE = { Paid: 'badge-green', Partial: 'badge-amber', Unpaid: 'ba
 
   // Dashboard's "+ New Purchase" quick-action links here with ?new=1 so the
   // GRN modal opens immediately instead of landing on a plain list.
-  if (new URLSearchParams(location.search).get('new') === '1') {
+  const params = new URLSearchParams(location.search);
+  if (params.get('new') === '1') {
     openGrnModal();
     history.replaceState(null, '', location.pathname); // don't reopen on refresh
+  } else if (params.get('po')) {
+    // Purchase Orders' "Receive as GRN" action (public/purchase-orders.html)
+    // links here with the PO id to pre-fill this exact form.
+    openGrnModal(parseInt(params.get('po'), 10));
+    history.replaceState(null, '', location.pathname);
   }
 })();
 
@@ -79,7 +86,7 @@ function renderPurchasesTable(purchases) {
 
 // ---------------- New GRN modal ----------------
 
-async function openGrnModal() {
+async function openGrnModal(poId) {
   try {
     [distributorsCache, itemsCache] = await Promise.all([
       api.get('/api/distributors'),
@@ -98,24 +105,40 @@ async function openGrnModal() {
     return;
   }
 
+  activePo = null;
+  if (poId) {
+    try {
+      activePo = await api.get(`/api/purchase-orders/${poId}`);
+    } catch (e) {
+      showToast(e.message, true);
+      return;
+    }
+    if (activePo.status === 'Cancelled') {
+      showToast('This purchase order was cancelled — receive it as a direct GRN instead', true);
+      activePo = null;
+    }
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const modalRoot = document.getElementById('modalRoot');
   modalRoot.innerHTML = `
     <div class="modal-overlay grn-modal" id="grnModalOverlay">
       <div class="modal">
         <div class="modal-header">
-          <h3>New GRN — Receive Stock</h3>
+          <h3>${activePo ? `New GRN — Receiving against ${escapeHtml(activePo.po_no)}` : 'New GRN — Receive Stock'}</h3>
           <button class="modal-close" onclick="closeModal()">&times;</button>
         </div>
         <form id="grnForm">
           <div class="modal-body">
+            ${activePo ? `<p class="muted" style="font-size:12.5px;margin:-4px 0 12px;">Lines below are pre-filled from the PO's pending quantities — adjust batch/expiry/qty to match what actually arrived.</p>` : ''}
             <div class="form-grid">
               <div class="form-field">
                 <label>Distributor *</label>
-                <select name="distributor_id" required>
+                <select name="distributor_id" required ${activePo ? 'disabled' : ''}>
                   <option value="">Select distributor…</option>
-                  ${distributorsCache.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('')}
+                  ${distributorsCache.map(d => `<option value="${d.id}" ${activePo && activePo.distributor_id === d.id ? 'selected' : ''}>${escapeHtml(d.name)}</option>`).join('')}
                 </select>
+                ${activePo ? `<input type="hidden" name="distributor_id" value="${activePo.distributor_id}">` : ''}
               </div>
               <div class="form-field">
                 <label>Invoice No. *</label>
@@ -185,10 +208,22 @@ async function openGrnModal() {
   document.getElementById('grnForm').querySelector('[name="discount_amount"]').addEventListener('input', recalcTotals);
   document.getElementById('grnForm').addEventListener('submit', handleGrnSubmit);
 
-  addLineRow();
+  if (activePo) {
+    const pendingLines = activePo.items.filter(l => l.quantity_pending > 0);
+    if (pendingLines.length === 0) {
+      showToast('This purchase order has nothing left pending — receiving it anyway as a fresh line', true);
+      addLineRow();
+    } else {
+      pendingLines.forEach(l => addLineRow({
+        item_id: l.item_id, quantity: l.quantity_pending, rate: l.rate, gst_rate: l.gst_rate
+      }));
+    }
+  } else {
+    addLineRow();
+  }
 }
 
-function addLineRow() {
+function addLineRow(prefill) {
   const id = 'row' + (++rowSeq);
   const tbody = document.getElementById('grnLinesBody');
   const tr = document.createElement('tr');
@@ -197,18 +232,18 @@ function addLineRow() {
     <td>
       <select class="f-item" required>
         <option value="">Select…</option>
-        ${itemsCache.map(i => `<option value="${i.id}" data-gst="${i.gst_rate}">${escapeHtml(i.name)}</option>`).join('')}
+        ${itemsCache.map(i => `<option value="${i.id}" data-gst="${i.gst_rate}" ${prefill && String(prefill.item_id) === String(i.id) ? 'selected' : ''}>${escapeHtml(i.name)}</option>`).join('')}
       </select>
     </td>
     <td><input type="text" class="f-batch" required></td>
     <td><input type="date" class="f-mfg"></td>
     <td><input type="date" class="f-expiry" required></td>
-    <td><input type="number" class="f-qty" min="1" step="1" value="1"></td>
+    <td><input type="number" class="f-qty" min="1" step="1" value="${prefill ? prefill.quantity : 1}"></td>
     <td><input type="number" class="f-free" min="0" step="1" value="0"></td>
-    <td><input type="number" class="f-rate" min="0" step="0.01" value="0"></td>
+    <td><input type="number" class="f-rate" min="0" step="0.01" value="${prefill ? prefill.rate : 0}"></td>
     <td><input type="number" class="f-mrp" min="0" step="0.01" value="0"></td>
     <td><input type="number" class="f-disc" min="0" max="100" step="0.01" value="0"></td>
-    <td><input type="number" class="f-gst" min="0" step="0.01" value="0"></td>
+    <td><input type="number" class="f-gst" min="0" step="0.01" value="${prefill ? prefill.gst_rate : 0}"></td>
     <td class="line-readout f-total">₹0.00</td>
     <td><button type="button" class="rm-row-btn" title="Remove line">&times;</button></td>
   `;
@@ -293,6 +328,7 @@ async function handleGrnSubmit(e) {
   const formData = Object.fromEntries(new FormData(form).entries());
   const payload = {
     distributor_id: formData.distributor_id,
+    purchase_order_id: activePo ? activePo.id : undefined,
     invoice_no: formData.invoice_no,
     invoice_date: formData.invoice_date,
     discount_amount: formData.discount_amount,
@@ -306,6 +342,7 @@ async function handleGrnSubmit(e) {
   try {
     const result = await api.post('/api/purchases', payload);
     showToast(`GRN saved — total ${fmtMoney(result.total_amount)}`);
+    activePo = null;
     closeModal();
     await loadPurchases();
   } catch (err) {
@@ -414,4 +451,5 @@ async function openDetailModal(id) {
 
 function closeModal() {
   document.getElementById('modalRoot').innerHTML = '';
+  activePo = null;
 }

@@ -99,7 +99,13 @@ router.get('/:id', (req, res) => {
   res.json({ ...purchase, items });
 });
 
-// POST /api/purchases - create a GRN: header + line items + the batches those lines put into stock
+// POST /api/purchases - create a GRN: header + line items + the batches those lines put into stock.
+// An optional purchase_order_id links this receipt back to an open PO (see
+// routes/purchase-orders.js) — quantity_received on each matching PO line
+// is bumped by however much of that item this GRN actually received, which
+// is what drives the PO's derived GRN status (Pending/Partial/Fully
+// Received). Receiving with no purchase_order_id at all — the original
+// VEDA flow — stays fully supported; nothing here requires a PO to exist.
 router.post('/', requireRole('Pharmacist', 'Accounts'), (req, res) => {
   const err = validatePurchaseBody(req.body);
   if (err) return res.status(400).json({ error: err });
@@ -108,6 +114,14 @@ router.post('/', requireRole('Pharmacist', 'Accounts'), (req, res) => {
   const store = db.prepare('SELECT * FROM stores WHERE id = ?').get(storeId);
   const distributor = db.prepare('SELECT * FROM distributors WHERE id = ? AND is_active = 1').get(req.body.distributor_id);
   if (!distributor) return res.status(400).json({ error: 'Distributor not found or inactive' });
+
+  let purchaseOrder = null;
+  if (req.body.purchase_order_id) {
+    purchaseOrder = db.prepare(
+      "SELECT * FROM purchase_orders WHERE id = ? AND store_id = ? AND status != 'Cancelled'"
+    ).get(req.body.purchase_order_id, storeId);
+    if (!purchaseOrder) return res.status(400).json({ error: 'Purchase order not found or cancelled' });
+  }
 
   const sameState = !store.state || !distributor.state ||
     store.state.trim().toLowerCase() === distributor.state.trim().toLowerCase();
@@ -125,10 +139,10 @@ router.post('/', requireRole('Pharmacist', 'Accounts'), (req, res) => {
 
   const insertPurchase = db.prepare(`
     INSERT INTO purchases (
-      store_id, distributor_id, invoice_no, invoice_date, grn_no, grn_date,
+      store_id, distributor_id, purchase_order_id, invoice_no, invoice_date, grn_no, grn_date,
       taxable_amount, cgst_amount, sgst_amount, igst_amount,
       discount_amount, round_off, total_amount, notes, created_by_user_id
-    ) VALUES (?, ?, ?, ?, ?, date('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, date('now'), ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertLine = db.prepare(`
     INSERT INTO purchase_items (
@@ -142,12 +156,23 @@ router.post('/', requireRole('Pharmacist', 'Accounts'), (req, res) => {
       purchase_rate, mrp, purchase_item_id, distributor_id
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  // Bumps the matching PO line's quantity_received — matched by item_id
+  // within this PO, since one GRN line always maps to a single item.
+  // Deliberately not capped at quantity_ordered: an over-delivery still
+  // needs to be recorded as received stock, it just leaves the PO's
+  // derived status at "Fully Received" rather than pretending the extra
+  // units don't exist (see computeGrnStatus in routes/purchase-orders.js).
+  const bumpPoReceived = db.prepare(`
+    UPDATE purchase_order_items SET quantity_received = quantity_received + ?
+    WHERE purchase_order_id = ? AND item_id = ?
+  `);
 
   try {
     const purchaseId = db.transaction(() => {
       const grnNo = generateGrnNo(db);
       const info = insertPurchase.run(
-        storeId, distributor.id, req.body.invoice_no.trim(), req.body.invoice_date, grnNo,
+        storeId, distributor.id, purchaseOrder ? purchaseOrder.id : null,
+        req.body.invoice_no.trim(), req.body.invoice_date, grnNo,
         taxableAmount, cgstAmount, sgstAmount, igstAmount, discountAmount, roundOff, totalAmount,
         req.body.notes || null, req.session.userId
       );
@@ -162,6 +187,7 @@ router.post('/', requireRole('Pharmacist', 'Accounts'), (req, res) => {
           l.item_id, storeId, l.batch_no, l.mfg_date, l.expiry_date, l.quantity + l.freeQuantity,
           l.purchaseRate, l.mrp, lineInfo.lastInsertRowid, distributor.id
         );
+        if (purchaseOrder) bumpPoReceived.run(l.quantity, purchaseOrder.id, l.item_id);
       });
 
       return newPurchaseId;

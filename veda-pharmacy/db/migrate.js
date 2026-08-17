@@ -105,6 +105,113 @@ function migrate(db) {
   ensureColumn(db, 'sales', 'commission_paid_at', 'TEXT');
   ensureColumn(db, 'sales', 'commission_payment_id', 'INTEGER REFERENCES doctor_commission_payments(id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_doctor_commission_payments_doctor ON doctor_commission_payments(doctor_id)');
+
+  // Shop Settings — self-service profile/billing-preference fields on the
+  // operator's own store, distinct from the Admin-only Stores CRUD.
+  ensureColumn(db, 'stores', 'tagline', 'TEXT');
+  ensureColumn(db, 'stores', 'owner_name', 'TEXT');
+  ensureColumn(db, 'stores', 'phone_alt', 'TEXT');
+  ensureColumn(db, 'stores', 'email', 'TEXT');
+  ensureColumn(db, 'stores', 'fssai_no', 'TEXT');
+  ensureColumn(db, 'stores', 'bill_prefix', "TEXT NOT NULL DEFAULT 'INV'");
+  ensureColumn(db, 'stores', 'default_gst_rate', 'REAL NOT NULL DEFAULT 12');
+  ensureColumn(db, 'stores', 'invoice_footer', 'TEXT');
+
+  // Categories — managed list for the item form's Category field;
+  // items.category itself stays plain TEXT (see the note in schema.sql).
+  ensureTable(db, 'categories', `
+    CREATE TABLE categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      icon TEXT,
+      description TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  // Purchase Orders — a request out to a distributor, separate from a GRN
+  // (an actual receipt); see the note in schema.sql for why "GRN status"
+  // is derived rather than stored, and why purchases.purchase_order_id is
+  // nullable (the original direct-GRN-with-no-PO flow stays supported).
+  ensureTable(db, 'purchase_orders', `
+    CREATE TABLE purchase_orders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id INTEGER NOT NULL,
+      distributor_id INTEGER NOT NULL,
+      po_no TEXT NOT NULL,
+      po_date TEXT DEFAULT (date('now')),
+      expected_date TEXT,
+      status TEXT NOT NULL DEFAULT 'Draft' CHECK (status IN ('Draft','Sent','Cancelled')),
+      notes TEXT,
+      taxable_amount REAL NOT NULL DEFAULT 0,
+      tax_amount REAL NOT NULL DEFAULT 0,
+      total_amount REAL NOT NULL DEFAULT 0,
+      created_by_user_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (store_id) REFERENCES stores(id),
+      FOREIGN KEY (distributor_id) REFERENCES distributors(id),
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    )
+  `);
+  ensureTable(db, 'purchase_order_items', `
+    CREATE TABLE purchase_order_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      purchase_order_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      quantity_ordered INTEGER NOT NULL,
+      quantity_received INTEGER NOT NULL DEFAULT 0,
+      rate REAL NOT NULL DEFAULT 0,
+      gst_rate REAL NOT NULL DEFAULT 0,
+      line_total REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id),
+      FOREIGN KEY (item_id) REFERENCES items(id)
+    )
+  `);
+  ensureColumn(db, 'purchases', 'purchase_order_id', 'INTEGER REFERENCES purchase_orders(id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_purchase_orders_store ON purchase_orders(store_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_purchase_order_items_po ON purchase_order_items(purchase_order_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_purchases_po ON purchases(purchase_order_id)');
+
+  // Stock adjustment types grew to match MediStore Pro's list (see the
+  // README's Architecture Decisions entry on the reskin) — 'Return to
+  // Supplier' and 'Sample' joined the original Expired/Damaged/Lost/
+  // Correction. Unlike a plain ALTER TABLE ADD COLUMN, SQLite CHECK
+  // constraints ARE enforced on every insert (verified — this isn't the
+  // "constraints are advisory" behavior some other databases have) and
+  // aren't ALTER-able in place, so an existing install's stock_adjustments
+  // table — created back when the CHECK only listed four values — would
+  // reject 'Sample'/'Return to Supplier' with a constraint-violation error
+  // forever unless the table itself is rebuilt. Detected by checking the
+  // table's own stored CREATE-TABLE SQL for the new marker value, then
+  // rebuilt the standard SQLite way (new table with the wider CHECK, copy
+  // rows across, drop the old one, rename) — the only ALTER-TABLE-proof
+  // way to widen a CHECK constraint.
+  const stockAdjSql = db.prepare(
+    `SELECT sql FROM sqlite_master WHERE type='table' AND name='stock_adjustments'`
+  ).get();
+  if (stockAdjSql && !stockAdjSql.sql.includes('Sample')) {
+    db.exec(`
+      CREATE TABLE stock_adjustments_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        store_id INTEGER NOT NULL,
+        batch_id INTEGER NOT NULL,
+        adjustment_type TEXT NOT NULL CHECK (adjustment_type IN ('Expired','Damaged','Lost','Correction','Return to Supplier','Sample')),
+        quantity INTEGER NOT NULL,
+        reason TEXT,
+        created_by_user_id INTEGER,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (store_id) REFERENCES stores(id),
+        FOREIGN KEY (batch_id) REFERENCES batches(id),
+        FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+      );
+      INSERT INTO stock_adjustments_new SELECT * FROM stock_adjustments;
+      DROP TABLE stock_adjustments;
+      ALTER TABLE stock_adjustments_new RENAME TO stock_adjustments;
+      CREATE INDEX IF NOT EXISTS idx_stock_adjustments_batch ON stock_adjustments(batch_id);
+    `);
+    console.log('✔ Migrated: widened stock_adjustments.adjustment_type CHECK constraint');
+  }
 }
 
 module.exports = { migrate, ensureColumn, ensureTable };

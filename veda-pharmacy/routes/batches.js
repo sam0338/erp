@@ -5,7 +5,7 @@ const { requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-const ADJUSTMENT_TYPES = ['Expired', 'Damaged', 'Lost', 'Correction'];
+const ADJUSTMENT_TYPES = ['Expired', 'Damaged', 'Lost', 'Correction', 'Return to Supplier', 'Sample'];
 
 // GET /api/batches - store-scoped stock lots, FEFO order (soonest expiry first)
 // ?q=paracetamol&item_id=&expiry=all|expired|near|ok&include_exhausted=1&near_days=90

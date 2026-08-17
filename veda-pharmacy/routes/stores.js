@@ -56,19 +56,27 @@ router.post('/', requireRole(), (req, res) => {
 
   const {
     name, code, address, city, state, pincode, phone, gstin,
-    drug_license_no, drug_license_no_2, drug_license_expiry
+    drug_license_no, drug_license_no_2, drug_license_expiry,
+    tagline, owner_name, phone_alt, email, fssai_no,
+    bill_prefix, default_gst_rate, invoice_footer
   } = req.body;
 
   try {
     const info = db.prepare(`
       INSERT INTO stores (
         name, code, address, city, state, pincode, phone, gstin,
-        drug_license_no, drug_license_no_2, drug_license_expiry
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        drug_license_no, drug_license_no_2, drug_license_expiry,
+        tagline, owner_name, phone_alt, email, fssai_no,
+        bill_prefix, default_gst_rate, invoice_footer
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       name.trim(), code.trim(), address || null, city || null, state || null,
       pincode || null, phone || null, gstin || null,
-      drug_license_no || null, drug_license_no_2 || null, drug_license_expiry || null
+      drug_license_no || null, drug_license_no_2 || null, drug_license_expiry || null,
+      tagline || null, owner_name || null, phone_alt || null, email || null, fssai_no || null,
+      (bill_prefix && String(bill_prefix).trim()) || 'INV',
+      default_gst_rate !== undefined && default_gst_rate !== '' ? default_gst_rate : 12,
+      invoice_footer || null
     );
     logActivity(db, req.session.userId, 'store_created', 'store', info.lastInsertRowid, { name });
     res.json({ success: true, id: info.lastInsertRowid });
@@ -91,7 +99,12 @@ router.put('/:id', requireRole(), (req, res) => {
 
   const fields = [
     'name', 'code', 'address', 'city', 'state', 'pincode', 'phone', 'gstin',
-    'drug_license_no', 'drug_license_no_2', 'drug_license_expiry', 'is_active'
+    'drug_license_no', 'drug_license_no_2', 'drug_license_expiry', 'is_active',
+    // Shop Settings fields (public/settings.html) — self-service profile/
+    // billing-preference columns, edited via this same endpoint against the
+    // operator's current store id (see the note in schema.sql).
+    'tagline', 'owner_name', 'phone_alt', 'email', 'fssai_no',
+    'bill_prefix', 'default_gst_rate', 'invoice_footer'
   ];
   const updates = [];
   const params = [];

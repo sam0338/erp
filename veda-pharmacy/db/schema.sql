@@ -25,6 +25,17 @@ CREATE TABLE IF NOT EXISTS stores (
     drug_license_no TEXT,               -- Form 20/21 retail license (allopathic)
     drug_license_no_2 TEXT,             -- many pharmacies hold a second license for Sch. H1/X stocking
     drug_license_expiry TEXT,
+    -- "Shop Settings" fields (public/settings.html) — everything below is
+    -- self-service profile/preferences for the operator's OWN store, as
+    -- distinct from the Admin-only cross-branch CRUD on stores.html.
+    tagline TEXT,                       -- e.g. "Licensed Retail Chemist & Druggist"
+    owner_name TEXT,
+    phone_alt TEXT,
+    email TEXT,
+    fssai_no TEXT,
+    bill_prefix TEXT NOT NULL DEFAULT 'INV',   -- drives generateInvoiceNo() in utils/helpers.js
+    default_gst_rate REAL NOT NULL DEFAULT 12, -- pre-fills the Add Item form's GST% field
+    invoice_footer TEXT,                -- printed on the POS receipt in place of the default line
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
 );
@@ -78,6 +89,22 @@ CREATE TABLE IF NOT EXISTS distributors (
     gstin TEXT,
     drug_license_no TEXT,               -- Form 20B/21B wholesale license
     opening_balance REAL NOT NULL DEFAULT 0,  -- +ve = we owe them, carried in from before this system
+    is_active INTEGER DEFAULT 1,
+    created_at TEXT DEFAULT (datetime('now'))
+);
+
+-- ---------- CATEGORIES ----------
+-- A managed list for the item form's Category field, separate from
+-- items.category itself (which stays plain TEXT, unchanged, so existing
+-- free-typed values from before this table existed keep working — the
+-- item form's category input just becomes a select sourced from here
+-- instead of a free datalist). Deleting a category never touches items
+-- that reference its name; see routes/categories.js.
+CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    icon TEXT,                          -- one emoji, shown on the Categories page's cards
+    description TEXT,
     is_active INTEGER DEFAULT 1,
     created_at TEXT DEFAULT (datetime('now'))
 );
@@ -167,10 +194,57 @@ CREATE TABLE IF NOT EXISTS prescriptions (
 );
 
 -- ---------- PURCHASES / GRN ----------
+-- ---------- PURCHASE ORDERS (what you intend to buy, before it arrives) ----------
+-- Deliberately a separate concept from PURCHASES/GRN below (what actually
+-- arrived and was received into stock): a PO is a request out to a
+-- distributor, a GRN is a receipt. A GRN can exist with no PO at all (the
+-- original, still-supported direct-receiving flow — a distributor
+-- delivery you weren't expecting, or a shop that never bothers with
+-- formal POs), or can be raised against an open PO, which is what
+-- purchases.purchase_order_id and purchase_order_items.quantity_received
+-- below are for. "GRN status" (Pending/Partial/Received) is deliberately
+-- NOT a stored column — it's derived by comparing quantity_received to
+-- quantity_ordered at query time (see routes/purchase-orders.js), so
+-- there's exactly one source of truth for it instead of a status field
+-- that could drift out of sync with the lines it's summarizing.
+CREATE TABLE IF NOT EXISTS purchase_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id INTEGER NOT NULL,
+    distributor_id INTEGER NOT NULL,
+    po_no TEXT NOT NULL,
+    po_date TEXT DEFAULT (date('now')),
+    expected_date TEXT,
+    status TEXT NOT NULL DEFAULT 'Draft' CHECK (status IN ('Draft','Sent','Cancelled')),
+    notes TEXT,
+    taxable_amount REAL NOT NULL DEFAULT 0,
+    tax_amount REAL NOT NULL DEFAULT 0,
+    total_amount REAL NOT NULL DEFAULT 0,
+    created_by_user_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (store_id) REFERENCES stores(id),
+    FOREIGN KEY (distributor_id) REFERENCES distributors(id),
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_order_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    quantity_ordered INTEGER NOT NULL,
+    quantity_received INTEGER NOT NULL DEFAULT 0,  -- bumped by routes/purchases.js when a GRN line
+                                                     -- against this PO is saved (matched by item_id)
+    rate REAL NOT NULL DEFAULT 0,
+    gst_rate REAL NOT NULL DEFAULT 0,
+    line_total REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id),
+    FOREIGN KEY (item_id) REFERENCES items(id)
+);
+
 CREATE TABLE IF NOT EXISTS purchases (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     store_id INTEGER NOT NULL,
     distributor_id INTEGER NOT NULL,
+    purchase_order_id INTEGER,          -- NULL for a direct GRN with no PO (still fully supported)
     invoice_no TEXT NOT NULL,           -- distributor's own invoice/bill number
     invoice_date TEXT NOT NULL,
     grn_no TEXT,                        -- our internal GRN number (see utils/helpers.js)
@@ -192,6 +266,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     created_at TEXT DEFAULT (datetime('now')),
     FOREIGN KEY (store_id) REFERENCES stores(id),
     FOREIGN KEY (distributor_id) REFERENCES distributors(id),
+    FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id),
     FOREIGN KEY (created_by_user_id) REFERENCES users(id),
     UNIQUE(distributor_id, invoice_no)
 );
@@ -341,7 +416,7 @@ CREATE TABLE IF NOT EXISTS stock_adjustments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     store_id INTEGER NOT NULL,
     batch_id INTEGER NOT NULL,
-    adjustment_type TEXT NOT NULL CHECK (adjustment_type IN ('Expired','Damaged','Lost','Correction')),
+    adjustment_type TEXT NOT NULL CHECK (adjustment_type IN ('Expired','Damaged','Lost','Correction','Return to Supplier','Sample')),
     quantity INTEGER NOT NULL,          -- always positive; always reduces batches.quantity
     reason TEXT,
     created_by_user_id INTEGER,
@@ -379,3 +454,6 @@ CREATE INDEX IF NOT EXISTS idx_sale_returns_sale ON sale_returns(sale_id);
 CREATE INDEX IF NOT EXISTS idx_sale_return_items_return ON sale_return_items(sale_return_id);
 CREATE INDEX IF NOT EXISTS idx_sale_return_items_sale_item ON sale_return_items(sale_item_id);
 CREATE INDEX IF NOT EXISTS idx_stock_adjustments_batch ON stock_adjustments(batch_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_orders_store ON purchase_orders(store_id);
+CREATE INDEX IF NOT EXISTS idx_purchase_order_items_po ON purchase_order_items(purchase_order_id);
+CREATE INDEX IF NOT EXISTS idx_purchases_po ON purchases(purchase_order_id);

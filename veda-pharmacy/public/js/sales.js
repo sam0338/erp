@@ -4,6 +4,7 @@ let itemsCache = [];
 let doctorsCache = [];
 let cart = []; // { item_id, name, unit, schedule, gst_rate, quantity, discount_pct, previewMrp, previewStock, loading }
 let historyCache = [];
+let currentStore = null; // for the receipt's tagline/footer — see Shop Settings (public/settings.html)
 
 const RX_SCHEDULES = ['H1', 'X'];
 const PAYMENT_BADGE = { Paid: 'badge-green', Partial: 'badge-amber', Unpaid: 'badge-red' };
@@ -57,6 +58,19 @@ const STATUS_BADGE = { Completed: 'badge-green', Cancelled: 'badge-red', Returne
     doctorsCache = await api.get('/api/doctors');
   } catch (e) { /* the Walk-in / No Doctor option still renders without this — see populateCheckoutDoctorSelect */ }
   populateCheckoutDoctorSelect();
+
+  try {
+    currentStore = await api.get(`/api/stores/${currentUser.storeId}`);
+  } catch (e) { /* non-fatal — receipt falls back to its default tagline/footer text */ }
+
+  // Arriving here via the global Retrieve Bill overlay (public/js/shell.js)
+  // from some other page — jump straight to that sale's detail.
+  const openSaleId = new URLSearchParams(window.location.search).get('openSale');
+  if (openSaleId) {
+    switchTab('history');
+    openHistoryDetail(parseInt(openSaleId, 10));
+    history.replaceState(null, '', '/sales.html');
+  }
 })();
 
 // Every sale tags a doctor now — the select always has a value (it defaults
@@ -397,7 +411,7 @@ function showReceipt(sale) {
           <div class="a5-bill">
             <div class="bill-header">
               <div class="bill-shop-name">${escapeHtml(currentUser.storeName || 'VEDA Pharmacy')}</div>
-              <div class="bill-shop-tag">Licensed Retail Chemist &amp; Druggist</div>
+              <div class="bill-shop-tag">${escapeHtml((currentStore && currentStore.tagline) || 'Licensed Retail Chemist & Druggist')}</div>
             </div>
             <div class="bill-meta">
               <div class="bill-meta-left">
@@ -435,7 +449,7 @@ function showReceipt(sale) {
               <div>Thank you — get well soon.</div>
               <div class="sig-line">Pharmacist</div>
             </div>
-            <div class="bill-footer">Computer-generated invoice · Goods once sold are not returnable except as per prevailing policy</div>
+            <div class="bill-footer">${escapeHtml((currentStore && currentStore.invoice_footer) || 'Computer-generated invoice · Goods once sold are not returnable except as per prevailing policy')}</div>
           </div>
         </div>
         <div class="modal-footer">

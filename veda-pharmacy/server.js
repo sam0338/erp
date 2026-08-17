@@ -56,6 +56,9 @@ app.use('/api/prescriptions', requireAuth, require('./routes/prescriptions'));
 app.use('/api/doctors', requireAuth, require('./routes/doctors'));
 app.use('/api/reports', requireAuth, require('./routes/reports'));
 app.use('/api/stores', requireAuth, require('./routes/stores'));
+app.use('/api/categories', requireAuth, require('./routes/categories'));
+app.use('/api/purchase-orders', requireAuth, require('./routes/purchase-orders'));
+app.use('/api/movements', requireAuth, require('./routes/movements'));
 
 // ---------- Static frontend ----------
 app.use(express.static(path.join(__dirname, 'public')));

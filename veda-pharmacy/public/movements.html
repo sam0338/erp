@@ -3,26 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Purchases / GRN — VEDA Pharmacy</title>
+<title>Item Movement Log — VEDA Pharmacy</title>
 <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css">
-<style>
-  .line-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .line-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-soft); padding: 6px 6px; border-bottom: 1px solid var(--line); }
-  .line-table td { padding: 5px 6px; vertical-align: top; }
-  .line-table input, .line-table select { width: 100%; padding: 6px 7px; border: 1px solid var(--line); border-radius: 5px; font-size: 12.5px; }
-  .line-table .line-readout { font-size: 12.5px; padding: 6px 2px; white-space: nowrap; }
-  .line-table .rm-row-btn { background: none; border: none; color: var(--danger); font-size: 16px; line-height: 1; padding: 4px; }
-  .grn-totals { display: flex; justify-content: flex-end; }
-  .grn-totals table { border-collapse: collapse; }
-  .grn-totals td { padding: 4px 10px; font-size: 13px; }
-  .grn-totals td:first-child { color: var(--ink-soft); text-align: right; }
-  .grn-totals td:last-child { text-align: right; font-family: var(--font-mono); min-width: 100px; }
-  .grn-totals tr.grand td { font-weight: 800; font-size: 14.5px; color: var(--brand-900); border-top: 1px solid var(--line); padding-top: 8px; }
-  .grn-modal .modal { max-width: 900px; }
-</style>
 </head>
 <body>
 <div id="trialBanner" style="display:none;"></div>
@@ -74,60 +59,55 @@
 
 <div id="main">
   <div class="topbar">
-    <div class="topbar-title">Purchases / GRN</div>
+    <div class="topbar-title">Item Movement Log</div>
     <div class="topbar-right">
       <div class="topbar-date" id="topbarDate"></div>
     </div>
   </div>
   <div class="page-content">
     <div class="section-header">
-      <div class="section-title">Purchases / GRN</div>
-      <button class="btn btn-primary" id="newGrnBtn">➕ New GRN</button>
+      <div class="section-title">Item Movement Log</div>
     </div>
-    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Receiving stock from a distributor creates a batch for every line automatically.</p>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">
+      A single chronological ledger of every stock-affecting event — purchases in, sales out, returns in,
+      manual adjustments out — read-only, aggregated live from the records elsewhere in the app.
+    </p>
 
     <div class="card" style="margin-bottom:16px;">
       <div class="card-body">
         <div class="filter-row" style="margin-bottom:0;">
-          <select id="distributorFilter" style="width:220px;"><option value="">All Distributors</option></select>
-          <select id="paymentStatusFilter" style="width:180px;">
-            <option value="">All Payment Status</option>
-            <option value="Unpaid">Unpaid</option>
-            <option value="Partial">Partial</option>
-            <option value="Paid">Paid</option>
+          <div class="search-wrap" style="flex:1;min-width:220px;">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" placeholder="Search by item name or reference no…">
+          </div>
+          <select id="typeFilter" style="max-width:160px;">
+            <option value="">All Types</option>
+            <option value="Purchase">Purchase (in)</option>
+            <option value="Sale">Sale (out)</option>
+            <option value="Return">Return (in)</option>
+            <option value="Adjustment">Adjustment (out)</option>
           </select>
         </div>
       </div>
     </div>
 
     <div class="card">
-      <div class="card-header">
-        <span class="card-title">Goods received</span>
-      </div>
+      <div class="card-header"><span class="card-title">📜 Movements</span></div>
       <div class="table-wrap">
         <table>
           <thead>
-            <tr>
-              <th>GRN No.</th>
-              <th>Distributor</th>
-              <th>Invoice No.</th>
-              <th>Invoice Date</th>
-              <th>Items</th>
-              <th>Total</th>
-              <th>Payment</th>
-              <th></th>
-            </tr>
+            <tr><th>Date &amp; Time</th><th>Medicine</th><th>Type</th><th>Qty</th><th>Reference</th><th>Note</th></tr>
           </thead>
-          <tbody id="purchasesTbody">
-            <tr><td colspan="8" class="empty-state">Loading purchases…</td></tr>
+          <tbody id="movementsTbody">
+            <tr><td colspan="6" class="empty-state">Loading movements…</td></tr>
           </tbody>
         </table>
       </div>
-      <div id="purchasesEmpty" style="display:none;">
+      <div id="movementsEmpty" style="display:none;">
         <div class="empty-state">
-          <div class="empty-icon">📥</div>
-          <h3>No purchases recorded yet</h3>
-          <p>Click "New GRN" to receive your first delivery.</p>
+          <div class="empty-icon">📜</div>
+          <h3>No movements yet</h3>
+          <p>Purchases, sales, returns and adjustments will show up here as they happen.</p>
         </div>
       </div>
     </div>
@@ -139,6 +119,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/shell.js"></script>
-<script src="/js/purchases.js"></script>
+<script src="/js/movements.js"></script>
 </body>
 </html>
