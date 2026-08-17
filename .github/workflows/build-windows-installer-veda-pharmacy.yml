@@ -1,0 +1,69 @@
+name: Build VEDA Pharmacy Windows Installer
+
+# Produces VedaPharmacySetup.exe on a real Windows runner, since the native
+# better-sqlite3 module and the NSIS compiler both need to build/run on
+# Windows (see veda-pharmacy/packaging/BUILD_INSTRUCTIONS.md for the
+# manual equivalent of every step below).
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "veda-pharmacy-v*"
+
+env:
+  NODE_VERSION: "20.18.1"
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download portable Node runtime to bundle
+        shell: pwsh
+        run: |
+          $ver = "${{ env.NODE_VERSION }}"
+          Invoke-WebRequest -Uri "https://nodejs.org/dist/v$ver/node-v$ver-win-x64.zip" -OutFile node.zip
+          Expand-Archive node.zip -DestinationPath veda-pharmacy/packaging
+          Move-Item "veda-pharmacy/packaging/node-v$ver-win-x64" "veda-pharmacy/packaging/node"
+
+      - name: Stage app folder (excluding license-tool, which never ships)
+        shell: pwsh
+        working-directory: veda-pharmacy
+        run: |
+          New-Item -ItemType Directory -Force -Path packaging/app | Out-Null
+          $exclude = @('node_modules', 'packaging', 'license-tool', '.git', '.github')
+          Get-ChildItem -Path . -Force |
+            Where-Object { $exclude -notcontains $_.Name } |
+            Copy-Item -Destination packaging/app -Recurse -Force
+
+      - name: npm install (production, built natively on Windows)
+        working-directory: veda-pharmacy/packaging/app
+        run: npm install --production --no-audit --no-fund
+
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+
+      - name: Compile installer
+        working-directory: veda-pharmacy/packaging
+        run: '& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi'
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VedaPharmacySetup
+          path: veda-pharmacy/packaging/VedaPharmacySetup.exe
+          if-no-files-found: error
+
+      - name: Attach installer to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: veda-pharmacy/packaging/VedaPharmacySetup.exe
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('veda-pharmacy-installer-build-{0}', github.run_number) }}
+          name: VEDA Pharmacy Installer (build ${{ github.run_number }})
+          make_latest: false

@@ -275,7 +275,7 @@ veda-pharmacy/
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
 ├── public/                  # static frontend — one HTML page per module + shared shell.js/api.js/style.css
 ├── license-tool/            # VENDOR-ONLY key generator — never ship this folder
-├── packaging/                # Windows silent launcher (.vbs) — mirrors veda-hotel-pms
+├── packaging/                # Silent launcher (.vbs) + NSIS installer build — see BUILD_INSTRUCTIONS.md
 └── uploads/rx/               # prescription photos (gitignored, .gitkeep only)
 ```
 
