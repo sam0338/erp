@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VEDA Pharmacy</title>
+<link rel="icon" type="image/x-icon" href="/img/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="trialBanner" style="display:none;"></div>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">VEDA<small>Pharmacy</small></div>
+    <div class="store-tag" id="storeTag">Loading store…</div>
+
+    <div class="nav-group">
+      <div class="nav-label">Overview</div>
+      <a class="nav-item" data-href="dashboard" href="/dashboard.html"><span class="dot"></span>Dashboard</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Catalog</div>
+      <a class="nav-item" data-href="items" href="/items.html"><span class="dot"></span>Item Master</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Inventory <span style="opacity:.5;font-weight:500;">(soon)</span></div>
+      <span class="nav-item" style="opacity:.4;cursor:default;"><span class="dot"></span>Batches &amp; Stock</span>
+      <span class="nav-item" style="opacity:.4;cursor:default;"><span class="dot"></span>Stock Adjustments</span>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Purchases <span style="opacity:.5;font-weight:500;">(soon)</span></div>
+      <span class="nav-item" style="opacity:.4;cursor:default;"><span class="dot"></span>Distributors</span>
+      <span class="nav-item" style="opacity:.4;cursor:default;"><span class="dot"></span>Purchases / GRN</span>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-label">Sales <span style="opacity:.5;font-weight:500;">(soon)</span></div>
+      <span class="nav-item" style="opacity:.4;cursor:default;"><span class="dot"></span>POS / Sales</span>
+      <span class="nav-item" style="opacity:.4;cursor:default;"><span class="dot"></span>Prescriptions</span>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-chip">
+        <span class="name" id="userName">—</span>
+        <span class="role" id="userRole">—</span>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Sign out</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1>Dashboard</h1>
+        <div class="sub">Item master is live. Batches, purchases, sales and prescriptions are coming next.</div>
+      </div>
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="label">Total Items</div>
+        <div class="value" id="statTotalItems">—</div>
+        <div class="hint">Active in item master</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Schedule H1 / X</div>
+        <div class="value accent" id="statScheduledItems">—</div>
+        <div class="hint">Require a prescription to sell</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Low / No Stock</div>
+        <div class="value" id="statLowStock">—</div>
+        <div class="hint">At or below reorder level</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Categories</div>
+        <div class="value" id="statCategories">—</div>
+        <div class="hint">Distinct item categories in use</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="flex-between" style="margin-bottom:14px;">
+        <strong style="color:var(--brand-900);font-family:var(--font-display);">Get started</strong>
+      </div>
+      <p class="muted" style="margin-bottom:10px;">Start by building out the item master — everything else (batches, GRN, POS, prescriptions) is keyed off it.</p>
+      <a class="btn btn-primary" href="/items.html">Go to Item Master →</a>
+    </div>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="modalRoot"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/shell.js"></script>
+<script>
+(async function () {
+  const user = await initShell({ activeView: 'dashboard' });
+  if (!user) return;
+
+  try {
+    const items = await api.get('/api/items?include_inactive=1');
+    const active = items.filter(i => i.is_active);
+    const scheduled = active.filter(i => i.schedule === 'H1' || i.schedule === 'X');
+    const lowStock = active.filter(i => Number(i.total_stock) <= Number(i.reorder_level));
+    const categories = new Set(active.map(i => i.category).filter(Boolean));
+
+    document.getElementById('statTotalItems').textContent = active.length;
+    document.getElementById('statScheduledItems').textContent = scheduled.length;
+    document.getElementById('statLowStock').textContent = lowStock.length;
+    document.getElementById('statCategories').textContent = categories.size;
+  } catch (e) {
+    showToast(e.message, true);
+  }
+})();
+</script>
+</body>
+</html>

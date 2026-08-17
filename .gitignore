@@ -16,3 +16,14 @@ veda-hotel-pms/license-tool/license_private.pem
 veda-hotel-pms/packaging/node/
 veda-hotel-pms/packaging/app/
 veda-hotel-pms/packaging/*.exe
+
+# VEDA Pharmacy
+veda-pharmacy/db/*.db
+veda-pharmacy/db/*.db-journal
+veda-pharmacy/.env
+veda-pharmacy/license-tool/license_private.pem
+veda-pharmacy/packaging/node/
+veda-pharmacy/packaging/app/
+veda-pharmacy/packaging/*.exe
+veda-pharmacy/uploads/rx/*
+!veda-pharmacy/uploads/rx/.gitkeep
