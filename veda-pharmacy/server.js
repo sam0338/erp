@@ -50,6 +50,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/items', requireAuth, require('./routes/items'));
 app.use('/api/distributors', requireAuth, require('./routes/distributors'));
 app.use('/api/purchases', requireAuth, require('./routes/purchases'));
+app.use('/api/batches', requireAuth, require('./routes/batches'));
 
 // ---------- Static frontend ----------
 app.use(express.static(path.join(__dirname, 'public')));

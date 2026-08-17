@@ -7,11 +7,12 @@ the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
 **Status: early build.** The database schema covers the whole domain
 (items, batches, distributors, purchases/GRN, sales, prescriptions).
-**Item Master, Distributors, and Purchases/GRN are live** — receiving a
-GRN creates the `batches` rows automatically, so stock is real from here
-on. The POS sale flow (with FEFO batch selection) and prescription capture
-are schema-ready but don't have routes/screens yet — see "What's next"
-below.
+**Item Master, Distributors, Purchases/GRN, and Batches & Stock are live**
+— receiving a GRN creates `batches` rows automatically, and the Batches &
+Stock screen shows every lot with expiry alerts and lets you write off
+expired/damaged/lost stock. The POS sale flow (with FEFO batch selection)
+and prescription capture are schema-ready but don't have routes/screens
+yet — see "What's next" below.
 
 ## Quick start
 
@@ -56,10 +57,10 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `items` | Shared item master — name, generic name, HSN, GST%, Schedule (OTC/H/H1/X), pack size, unit, reorder level |
 | `distributors` | Supplier ledger — CRUD live, includes state (used for CGST/SGST vs IGST) |
 | `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction |
-| `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP |
+| `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP — viewable/searchable live, with expiry status (expired/near/ok) computed per row |
 | `sales`, `sale_items` | POS invoices; each line records the exact FEFO-selected `batch_id` it was sold from |
 | `prescriptions` | Patient/doctor/Rx reference + optional photo, for Schedule H1/X sales |
-| `stock_adjustments` | Expiry write-off / damage / loss / correction, always reducing a batch's quantity |
+| `stock_adjustments` | Expiry write-off / damage / loss / correction, always reducing a batch's quantity — CRUD live from the Batches & Stock screen |
 | `activity_log` | Audit trail |
 | `license_state` | Single-row trial/license record |
 
@@ -67,23 +68,22 @@ See `db/schema.sql` for the full, commented definition. Summary:
 a DB feature: query `batches` for an `(item_id, store_id)` with
 `quantity > 0` ordered by `expiry_date ASC`, and allocate across as many
 lots as needed to cover the sold quantity. The `idx_batches_fefo` index
-exists to make that query cheap. This isn't implemented yet — it's the
-core of the POS sale route when that gets built.
+exists to make that query cheap, and `GET /api/batches` already returns
+batches in this order — the POS route just needs to walk that list and
+allocate. This isn't implemented yet — it's the core of the POS sale route
+when that gets built.
 
 ## What's next (not built yet)
 
 Roughly in the order it makes sense to build:
 
-1. **Batches & Stock view** — list batches per item/store, expiry alerts,
-   manual `stock_adjustments`. (Batches already exist and accumulate
-   correctly from GRN — this is just the read/adjust UI on top.)
-2. **POS / Sales** — the FEFO allocator, GST-split invoice totals
+1. **POS / Sales** — the FEFO allocator, GST-split invoice totals
    (CGST/SGST/IGST), and the H1/X gate that requires a `prescriptions`
    row before the sale can complete.
-3. **Prescriptions** — the `multer` upload endpoint for the Rx photo
+2. **Prescriptions** — the `multer` upload endpoint for the Rx photo
    (`uploads/rx/`, gitignored) plus a lightweight register/search view.
-4. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
-5. **Distributor ledger** — payment history/statement view; `PUT
+3. **Reports** — GST summary, expiry-due-soon, low-stock, sales register.
+4. **Distributor ledger** — payment history/statement view; `PUT
    /api/purchases/:id/payment` already records payments, this just
    surfaces them per distributor.
 
@@ -124,7 +124,7 @@ veda-pharmacy/
 │   ├── auth.js              # session gate (requireAuth, requireRole)
 │   └── license.js           # trial/license gate
 ├── routes/
-│   ├── auth.js, license.js, items.js, distributors.js, purchases.js
+│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js
 ├── utils/
 │   ├── helpers.js           # logActivity, generateGrnNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
