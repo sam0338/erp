@@ -5,19 +5,20 @@ India — Node.js + Express + better-sqlite3 + plain HTML/JS frontend, no
 build step, offline-first. Built in the same pattern as VEDA Hotel PMS and
 the other VEDA products (MarkEdge CRM, HRMS, School MS).
 
-**Status: full operational loop + reporting + accounting + returns
-(reflected end-to-end, including in reporting).** Item Master,
-Distributors (with a full ledger/statement view), Purchases/GRN, Batches &
-Stock, POS/Sales (including partial-line returns), Prescriptions, Doctors,
-and Reports are all live — a GRN creates batches, POS sells against them
-FEFO (oldest expiry first, splitting across lots automatically), a sale
-with a Schedule H1/X item is blocked until a prescription is captured, a
-return restores stock without ever mutating the original invoice, and the
-GST summary / expiry risk / low-stock / sales-register reports all read
-off that same data — net of returns — with CSV export, and a doctor's
-accrued referral commission can be settled in one lump-sum payout with a
-full paid/unpaid audit trail. What's left is a multi-store switcher UI
-and a multi-installment distributor payment history — see "What's next"
+**Status: full operational loop + reporting + accounting + returns +
+multi-store, end to end.** Item Master, Distributors (with a full
+ledger/statement view), Purchases/GRN, Batches & Stock, POS/Sales
+(including partial-line returns), Prescriptions, Doctors, Reports, and
+Stores are all live — a GRN creates batches, POS sells against them FEFO
+(oldest expiry first, splitting across lots automatically), a sale with a
+Schedule H1/X item is blocked until a prescription is captured, a return
+restores stock without ever mutating the original invoice, the GST
+summary / expiry risk / low-stock / sales-register reports all read off
+that same data — net of returns — with CSV export, a doctor's accrued
+referral commission can be settled in one lump-sum payout with a full
+paid/unpaid audit trail, and an Admin can create additional branches and
+switch the active store for their session from the sidebar. What's left
+is a multi-installment distributor payment history — see "What's next"
 below.
 
 ## Quick start
@@ -146,6 +147,25 @@ the schema in ways that are painful to change later:
   commission has already been paid out (see the Doctor commission note
   above) — the return still restores stock and refunds the patient
   normally, it just leaves the (already-settled) commission figure alone.
+- **The store switcher is Admin-only, and reuses a session-level override
+  rather than editing the user's home store.** Every other role
+  (Pharmacist/Cashier/Accounts) stays pinned to `users.store_id`, the store
+  they were created under — `req.session.storeId`/`storeName` only ever
+  gets set for an Admin via `POST /api/stores/switch`, and every route that
+  scopes a query by store reads that session value (falling back to
+  `users.store_id` when it's unset), so a non-Admin's effective store never
+  moves no matter what's in the sidebar. This mirrors the property switcher
+  in VEDA Hotel PMS. The switch endpoint is gated with `requireRole()`
+  called with **no roles listed** — every role-check in
+  `middleware/auth.js` lets Admin through first regardless of the allowed
+  list, so an empty list rejects every role except Admin, which is exactly
+  the "Admin-only" gate this needed without a separate check. `items`,
+  `distributors`, and `doctors` stay shared catalogs across the switch
+  (as documented above) — only `batches`, `purchases`, `sales`, and their
+  child tables actually change when you switch. Deleting a store
+  (soft-delete, `is_active = 0`) is blocked if it's the last active store,
+  or if any active user still has it as their home store — otherwise a
+  switch or a login could silently land someone in a closed branch.
 
 ## Database schema
 
@@ -153,7 +173,7 @@ See `db/schema.sql` for the full, commented definition. Summary:
 
 | Table | Purpose |
 |---|---|
-| `stores` | Branches/outlets (multi-store from day 1) |
+| `stores` | Branches/outlets (multi-store from day 1) — CRUD + an Admin-only session store-switcher are live from the sidebar |
 | `roles`, `users` | Admin / Pharmacist / Cashier / Accounts |
 | `items` | Shared item master — name, generic name, HSN, GST%, Schedule (OTC/H/H1/X), pack size, unit, reorder level |
 | `distributors` | Supplier ledger — CRUD live, includes state (used for CGST/SGST vs IGST), plus a full statement view (opening balance, every purchase/payment as a dated debit/credit, running balance) |
@@ -201,15 +221,11 @@ deduction, so there's no race with a concurrent sale.
 
 ## What's next (not built yet)
 
-1. **Multi-store UI** — the schema has supported multiple stores since day
-   one and every query is already `store_id`-scoped, but there's no
-   store-switcher in the UI yet; every user is just pinned to the store
-   they were seeded/created under.
-2. **Multi-installment payment history** — as noted above, the distributor
+1. **Multi-installment payment history** — as noted above, the distributor
    ledger currently tracks one cumulative `amount_paid` per purchase, not
    a log of each individual part-payment. Would need a dedicated
    `distributor_payments` table if that granularity is ever needed.
-3. **Partial commission payouts** — `POST /api/doctors/:id/pay-commission`
+2. **Partial commission payouts** — `POST /api/doctors/:id/pay-commission`
    only supports settling *all* of a doctor's currently-unpaid commission
    in one go, matching the common "settle up for the month" flow. Paying
    an arbitrary partial amount and choosing which sales it covers isn't
@@ -253,7 +269,7 @@ veda-pharmacy/
 │   ├── auth.js              # session gate (requireAuth, requireRole)
 │   └── license.js           # trial/license gate
 ├── routes/
-│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js, doctors.js, reports.js
+│   ├── auth.js, license.js, items.js, distributors.js, purchases.js, batches.js, sales.js, prescriptions.js, doctors.js, reports.js, stores.js
 ├── utils/
 │   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock

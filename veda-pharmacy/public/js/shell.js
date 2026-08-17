@@ -23,6 +23,37 @@ async function initShell(opts) {
     storeTag.textContent = currentUser.storeName || (currentUser.storeId ? ('Store #' + currentUser.storeId) : 'VEDA Pharmacy');
   }
 
+  // Only Admin gets to see every store and switch between them — every
+  // other role stays pinned to the store on their user record (the backend
+  // enforces this independently on POST /api/stores/switch; this is just
+  // what decides whether the picker/nav link render at all).
+  if (currentUser.role === 'Admin') {
+    const adminNavGroup = document.getElementById('adminNavGroup');
+    if (adminNavGroup) adminNavGroup.style.display = '';
+
+    if (storeTag) {
+      try {
+        const stores = await api.get('/api/stores');
+        if (stores.length > 1) {
+          const select = document.createElement('select');
+          select.id = 'storeSwitcher';
+          select.style.cssText = 'width:100%;padding:6px 8px;border-radius:6px;border:1px solid rgba(234,243,236,0.2);background:rgba(234,243,236,0.08);color:#EAF3EC;font-size:12px;';
+          select.innerHTML = stores.map(s => `<option value="${s.id}" ${s.id === currentUser.storeId ? 'selected' : ''}>${escapeHtml(s.name)}</option>`).join('');
+          select.addEventListener('change', async () => {
+            try {
+              await api.post('/api/stores/switch', { store_id: parseInt(select.value, 10) });
+              window.location.reload();
+            } catch (e) {
+              showToast(e.message, true);
+            }
+          });
+          storeTag.innerHTML = '';
+          storeTag.appendChild(select);
+        }
+      } catch (e) { /* switcher is best-effort — plain store name still shows if this fails */ }
+    }
+  }
+
   document.querySelectorAll('.nav-item[data-href]').forEach(item => {
     if (item.dataset.href === opts.activeView) item.classList.add('active');
   });

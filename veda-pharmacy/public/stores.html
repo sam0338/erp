@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VEDA Pharmacy</title>
+<title>Stores — VEDA Pharmacy</title>
 <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -66,40 +66,38 @@
   <main class="main">
     <div class="page-header">
       <div>
-        <h1>Dashboard</h1>
-        <div class="sub">Item master is live. Batches, purchases, sales and prescriptions are coming next.</div>
+        <h1>Stores</h1>
+        <div class="sub">Every branch this install operates — switch between them from the sidebar.</div>
       </div>
+      <button class="btn btn-primary" id="addStoreBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg>
+        Add Store
+      </button>
     </div>
 
-    <div class="stat-grid">
-      <div class="stat-card">
-        <div class="label">Total Items</div>
-        <div class="value" id="statTotalItems">—</div>
-        <div class="hint">Active in item master</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Schedule H1 / X</div>
-        <div class="value accent" id="statScheduledItems">—</div>
-        <div class="hint">Require a prescription to sell</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Low / No Stock</div>
-        <div class="value" id="statLowStock">—</div>
-        <div class="hint">At or below reorder level</div>
-      </div>
-      <div class="stat-card">
-        <div class="label">Categories</div>
-        <div class="value" id="statCategories">—</div>
-        <div class="hint">Distinct item categories in use</div>
-      </div>
+    <div class="search-bar">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink-soft);white-space:nowrap;">
+        <input type="checkbox" id="includeInactive"> Show inactive
+      </label>
     </div>
 
-    <div class="card">
-      <div class="flex-between" style="margin-bottom:14px;">
-        <strong style="color:var(--brand-900);font-family:var(--font-display);">Get started</strong>
-      </div>
-      <p class="muted" style="margin-bottom:10px;">Start by building out the item master — everything else (batches, GRN, POS, prescriptions) is keyed off it.</p>
-      <a class="btn btn-primary" href="/items.html">Go to Item Master →</a>
+    <div class="card" style="padding:0;overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Store</th>
+            <th>Code</th>
+            <th>City / State</th>
+            <th>GSTIN</th>
+            <th>Drug License</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="storesTbody">
+          <tr><td colspan="7" class="empty-state">Loading stores…</td></tr>
+        </tbody>
+      </table>
     </div>
   </main>
 </div>
@@ -109,26 +107,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/shell.js"></script>
-<script>
-(async function () {
-  const user = await initShell({ activeView: 'dashboard' });
-  if (!user) return;
-
-  try {
-    const items = await api.get('/api/items?include_inactive=1');
-    const active = items.filter(i => i.is_active);
-    const scheduled = active.filter(i => i.schedule === 'H1' || i.schedule === 'X');
-    const lowStock = active.filter(i => Number(i.total_stock) <= Number(i.reorder_level));
-    const categories = new Set(active.map(i => i.category).filter(Boolean));
-
-    document.getElementById('statTotalItems').textContent = active.length;
-    document.getElementById('statScheduledItems').textContent = scheduled.length;
-    document.getElementById('statLowStock').textContent = lowStock.length;
-    document.getElementById('statCategories').textContent = categories.size;
-  } catch (e) {
-    showToast(e.message, true);
-  }
-})();
-</script>
+<script src="/js/stores.js"></script>
 </body>
 </html>
