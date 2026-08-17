@@ -62,6 +62,15 @@ function computeInclusiveChunk(quantity, unitRate, gstRate) {
   return { gross, taxable, cgst, sgst };
 }
 
+// Every sale carries a patient name and a doctor tag now — not just the
+// Schedule H1/X ones. The doctor tag is what commission accrual is keyed
+// off (see the POST handler below), so it can't be silently skipped: the
+// client must send an explicit value, either a registered doctor's id or
+// the literal string 'walkin' for a genuine no-referral counter sale.
+// 'walkin' still requires the cashier to make a conscious choice — it's
+// never just an absent field — while carrying zero commission.
+const WALKIN = 'walkin';
+
 function validateSaleBody(body) {
   if (!Array.isArray(body.items) || body.items.length === 0) return 'At least one item is required';
   for (const [i, line] of body.items.entries()) {
@@ -69,6 +78,12 @@ function validateSaleBody(body) {
     if (!line.item_id) return `Line ${n}: item is required`;
     const qty = parseInt(line.quantity, 10);
     if (!Number.isFinite(qty) || qty <= 0) return `Line ${n}: quantity must be a positive number`;
+  }
+  if (!body.customer_name || !String(body.customer_name).trim()) {
+    return 'Patient name is required';
+  }
+  if (body.doctor_id === undefined || body.doctor_id === null || body.doctor_id === '') {
+    return 'Doctor is required — select a doctor, or choose Walk-in / No Doctor';
   }
   if (body.payment_mode && !['Cash', 'UPI', 'Card', 'Credit'].includes(body.payment_mode)) {
     return 'Invalid payment_mode';
@@ -85,8 +100,10 @@ function validateSaleBody(body) {
 router.get('/', (req, res) => {
   const { payment_status, from, to, q } = req.query;
   let query = `
-    SELECT s.*, (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS item_count
+    SELECT s.*, d.name AS doctor_name,
+      (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) AS item_count
     FROM sales s
+    LEFT JOIN doctors d ON s.doctor_id = d.id
     WHERE s.store_id = ?
   `;
   const params = [req.session.storeId];
@@ -146,13 +163,31 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/sales - ring up a sale: FEFO-allocates stock, computes
-// MRP-inclusive GST per line, optionally records a prescription for any
-// Schedule H1/X items, and decrements every batch it draws from — all in
-// one transaction, so a mid-sale stock shortfall rolls back cleanly with
-// nothing partially sold.
+// MRP-inclusive GST per line, records a prescription for any Schedule H1/X
+// items, and decrements every batch it draws from — all in one transaction,
+// so a mid-sale stock shortfall rolls back cleanly with nothing partially
+// sold. Every sale requires a patient name and a doctor tag (a registered
+// doctor, or the explicit 'walkin' — see validateSaleBody/WALKIN above) —
+// commission can only ever be calculated off a doctor that's actually on
+// the sale, so this endpoint refuses to create one without that decision
+// being made one way or the other.
 router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
   const err = validateSaleBody(req.body);
   if (err) return res.status(400).json({ error: err });
+
+  // Resolve the sale-wide "tagged" doctor up front — this is what commission
+  // accrual keys off for EVERY sale now, not just prescription ones (see the
+  // note on the doctors table in db/schema.sql for why this stays opt-in per
+  // doctor rather than automatic). 'walkin' is a deliberate, explicit choice
+  // by the cashier, not a default — it resolves to no doctor and zero
+  // commission, same as an untagged sale always has.
+  let taggedDoctor = null;
+  if (req.body.doctor_id !== WALKIN) {
+    const doctorIdNum = parseInt(req.body.doctor_id, 10);
+    if (!Number.isFinite(doctorIdNum)) return res.status(400).json({ error: 'Invalid doctor selection' });
+    taggedDoctor = db.prepare('SELECT * FROM doctors WHERE id = ? AND is_active = 1').get(doctorIdNum);
+    if (!taggedDoctor) return res.status(400).json({ error: 'Selected doctor was not found or is inactive' });
+  }
 
   const storeId = req.session.storeId;
   const itemIds = [...new Set(req.body.items.map(l => l.item_id))];
@@ -168,10 +203,18 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
     .filter(i => RX_SCHEDULES.includes(i.schedule));
   const rxNames = [...new Set(rxItems.map(i => i.name))];
 
+  // The prescription's own patient name comes from the sale-wide customer_name
+  // (already validated as required above) — no separate patient-name entry for
+  // the Rx panel. The prescribing doctor stays a distinct free-text field from
+  // the sale-wide doctor tag above: legally, a pharmacy must be able to
+  // dispense Schedule H1/X on ANY qualified doctor's prescription, not only
+  // ones registered in this pharmacy's own commission list, so 'walkin' on the
+  // sale-wide tag does not block an H1/X sale — it just means this particular
+  // sale earns no commission even though it's a legitimate, documented Rx.
   const prescriptionInput = req.body.prescription;
-  if (rxNames.length > 0 && (!prescriptionInput || !prescriptionInput.patient_name || !prescriptionInput.doctor_name)) {
+  if (rxNames.length > 0 && (!prescriptionInput || !prescriptionInput.doctor_name || !String(prescriptionInput.doctor_name).trim())) {
     return res.status(400).json({
-      error: `Prescription (patient name + doctor name) is required to sell: ${rxNames.join(', ')}`
+      error: `A prescribing doctor name is required to sell: ${rxNames.join(', ')}`
     });
   }
 
@@ -200,23 +243,25 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
   `);
   const decrementBatch = db.prepare('UPDATE batches SET quantity = quantity - ? WHERE id = ?');
 
-  // A prescribing doctor only accrues commission when they're a registered,
-  // active row in the doctors table — see the note on that table in
-  // db/schema.sql. Free-typing a name on the Rx panel that doesn't match a
-  // registered doctor (prescriptionInput.doctor_id absent) accrues nothing.
-  let referredDoctor = null;
+  // The prescription record's own doctor_id link (for display in the
+  // Prescriptions register) defaults to the sale-wide tagged doctor, but can
+  // point at a different registered doctor if the Rx panel's search picked
+  // one explicitly — covering the case where the prescriber and the
+  // commission-earning referrer aren't the same person.
+  let prescriptionDoctorId = taggedDoctor ? taggedDoctor.id : null;
   if (prescriptionInput && prescriptionInput.doctor_id) {
-    referredDoctor = db.prepare('SELECT * FROM doctors WHERE id = ? AND is_active = 1').get(prescriptionInput.doctor_id) || null;
+    const pd = db.prepare('SELECT id FROM doctors WHERE id = ? AND is_active = 1').get(prescriptionInput.doctor_id);
+    if (pd) prescriptionDoctorId = pd.id;
   }
 
   try {
     const saleId = db.transaction(() => {
       let prescriptionId = null;
-      if (prescriptionInput && prescriptionInput.patient_name && prescriptionInput.doctor_name) {
+      if (prescriptionInput && prescriptionInput.doctor_name && String(prescriptionInput.doctor_name).trim()) {
         const pInfo = insertPrescription.run(
-          prescriptionInput.patient_name.trim(), prescriptionInput.patient_age || null,
+          req.body.customer_name.trim(), prescriptionInput.patient_age || null,
           prescriptionInput.patient_gender || null, prescriptionInput.doctor_name.trim(),
-          referredDoctor ? referredDoctor.id : null,
+          prescriptionDoctorId,
           prescriptionInput.doctor_reg_no || null, prescriptionInput.rx_ref_no || null,
           prescriptionInput.rx_date || null, prescriptionInput.notes || null, req.session.userId
         );
@@ -229,7 +274,7 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
       // and priced. Both get reconciled in the UPDATE at the end.
       const invoiceNo = generateInvoiceNo(db, storeId);
       const saleInfo = insertSale.run(
-        storeId, invoiceNo, req.body.customer_name || null, req.body.customer_phone || null, prescriptionId,
+        storeId, invoiceNo, req.body.customer_name.trim(), req.body.customer_phone || null, prescriptionId,
         req.body.payment_mode || 'Cash', req.session.userId
       );
       const newSaleId = saleInfo.lastInsertRowid;
@@ -279,9 +324,11 @@ router.post('/', requireRole('Cashier', 'Pharmacist'), (req, res) => {
       // discount/incentive above — does NOT reduce it. The patient pays
       // totalAmount either way; this is a separate liability the pharmacy
       // owes the doctor, not visible on the customer's receipt math.
-      const doctorId = referredDoctor ? referredDoctor.id : null;
-      const doctorCommissionPct = referredDoctor ? referredDoctor.default_commission_pct : 0;
-      const doctorCommissionAmount = referredDoctor ? round2(totalAmount * doctorCommissionPct / 100) : 0;
+      // taggedDoctor is null for a 'walkin' sale — same zero-commission
+      // outcome as before, just now the result of an explicit choice.
+      const doctorId = taggedDoctor ? taggedDoctor.id : null;
+      const doctorCommissionPct = taggedDoctor ? taggedDoctor.default_commission_pct : 0;
+      const doctorCommissionAmount = taggedDoctor ? round2(totalAmount * doctorCommissionPct / 100) : 0;
 
       updateSaleTotals.run(
         taxableAmount, cgstAmount, sgstAmount, discountAmount, patientIncentivePct, patientIncentiveAmount,

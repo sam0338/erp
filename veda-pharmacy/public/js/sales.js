@@ -46,6 +46,8 @@ const STATUS_BADGE = { Completed: 'badge-ok', Cancelled: 'badge-danger', Returne
   document.getElementById('historySearch').addEventListener('input', debounce(loadHistory, 250));
   document.getElementById('historyPaymentFilter').addEventListener('change', loadHistory);
 
+  document.getElementById('checkoutDoctor').addEventListener('change', onCheckoutDoctorChange);
+
   try {
     itemsCache = await api.get('/api/items');
   } catch (e) {
@@ -53,8 +55,56 @@ const STATUS_BADGE = { Completed: 'badge-ok', Cancelled: 'badge-danger', Returne
   }
   try {
     doctorsCache = await api.get('/api/doctors');
-  } catch (e) { /* doctor picker is best-effort — free-text name still works without it */ }
+  } catch (e) { /* the Walk-in / No Doctor option still renders without this — see populateCheckoutDoctorSelect */ }
+  populateCheckoutDoctorSelect();
 })();
+
+// Every sale tags a doctor now — the select always has a value (it defaults
+// to Walk-in / No Doctor), so there's no "forgot to pick one" state; the
+// cashier has to actively pick a registered doctor to earn commission, and
+// picking is required either way (see validateSaleBody's doctor_id check).
+function populateCheckoutDoctorSelect() {
+  const select = document.getElementById('checkoutDoctor');
+  const options = ['<option value="walkin">Walk-in / No Doctor</option>']
+    .concat(doctorsCache.map(d => `<option value="${d.id}">${escapeHtml(d.name)} (${d.default_commission_pct}%)</option>`));
+  select.innerHTML = options.join('');
+}
+
+function getCheckoutDoctorId() {
+  const val = document.getElementById('checkoutDoctor').value;
+  return val === 'walkin' ? null : parseInt(val, 10);
+}
+
+function onCheckoutDoctorChange() {
+  const select = document.getElementById('checkoutDoctor');
+  const hint = document.getElementById('checkoutDoctorHint');
+  if (select.value === 'walkin') {
+    hint.style.display = 'none';
+  } else {
+    const doctor = doctorsCache.find(d => d.id === parseInt(select.value, 10));
+    if (doctor) {
+      hint.textContent = `${doctor.default_commission_pct}% commission will accrue on this sale.`;
+      hint.style.display = 'block';
+    }
+  }
+
+  // Convenience prefill only — if the Rx panel's prescribing-doctor field is
+  // still empty, default it to the same doctor (most sales, the referrer and
+  // the prescriber are the same person). Never overwrites a value the
+  // cashier already typed or picked, since the prescriber can legitimately
+  // be someone else entirely (see the note in routes/sales.js).
+  const rxDoctorName = document.getElementById('rxDoctorName');
+  if (select.value !== 'walkin' && !rxDoctorName.value.trim()) {
+    const doctor = doctorsCache.find(d => d.id === parseInt(select.value, 10));
+    if (doctor) {
+      rxDoctorName.value = doctor.name;
+      document.getElementById('rxDoctorId').value = doctor.id;
+      const rxHint = document.getElementById('doctorCommissionHint');
+      rxHint.textContent = `Registered doctor — ${doctor.default_commission_pct}% commission will accrue on this sale.`;
+      rxHint.style.display = 'block';
+    }
+  }
+}
 
 function debounce(fn, ms) {
   let t;
@@ -104,10 +154,14 @@ function runItemSearch() {
 }
 
 // ---------------- Doctor picker (Rx panel) ----------------
-// Selecting a result here is what makes a sale eligible for commission —
-// see the note on the doctors table in db/schema.sql. Typing a name that
-// doesn't match anything in the list is still a valid prescription (the
-// text field alone satisfies the H1/X gate), it just accrues no commission.
+// This is the PRESCRIBING doctor for the legal Rx record — independent of
+// the sale-wide "Doctor" select above, which is what actually drives
+// commission (see routes/sales.js). They're usually the same person, hence
+// the auto-prefill in onCheckoutDoctorChange, but this field can point at
+// any doctor (registered here or not) since a pharmacy must be able to
+// dispense on any qualified doctor's prescription. Typing a name that
+// doesn't match anything in the list is still a valid prescription — the
+// text field alone satisfies the H1/X gate.
 
 function runDoctorSearch() {
   const q = document.getElementById('rxDoctorName').value.trim().toLowerCase();
@@ -132,7 +186,7 @@ function runDoctorSearch() {
       document.getElementById('rxDoctorName').value = doctor.name; // no 'input' event on programmatic set — id below survives
       document.getElementById('rxDoctorId').value = doctor.id;
       const hint = document.getElementById('doctorCommissionHint');
-      hint.textContent = `Registered doctor — ${doctor.default_commission_pct}% commission will accrue on this sale.`;
+      hint.textContent = `Matches a registered doctor on file.${doctor.id === getCheckoutDoctorId() ? '' : ' Note: this differs from the Doctor selected above, which is what commission is based on.'}`;
       hint.style.display = 'block';
       resultsBox.style.display = 'none';
     });
@@ -251,17 +305,29 @@ async function handleCheckout() {
     return;
   }
 
+  const patientName = document.getElementById('customerName').value.trim();
+  if (!patientName) {
+    showToast('Patient name is required', true);
+    return;
+  }
+  // The select always has a value (defaults to walkin), but guard anyway —
+  // an empty value here would otherwise fail server-side with a less
+  // specific error.
+  const doctorId = document.getElementById('checkoutDoctor').value;
+  if (!doctorId) {
+    showToast('Select a doctor, or choose Walk-in / No Doctor', true);
+    return;
+  }
+
   const needsRx = cart.some(l => RX_SCHEDULES.includes(l.schedule));
   let prescription = null;
   if (needsRx) {
-    const patientName = document.getElementById('rxPatientName').value.trim();
     const doctorName = document.getElementById('rxDoctorName').value.trim();
-    if (!patientName || !doctorName) {
-      showToast('Patient name and doctor name are required for the prescription item(s) in this cart', true);
+    if (!doctorName) {
+      showToast('A prescribing doctor name is required for the prescription item(s) in this cart', true);
       return;
     }
     prescription = {
-      patient_name: patientName,
       patient_age: document.getElementById('rxPatientAge').value || null,
       patient_gender: document.getElementById('rxPatientGender').value || null,
       doctor_name: doctorName,
@@ -273,8 +339,9 @@ async function handleCheckout() {
   }
 
   const payload = {
-    customer_name: document.getElementById('customerName').value || null,
+    customer_name: patientName,
     customer_phone: document.getElementById('customerPhone').value || null,
+    doctor_id: doctorId,
     payment_mode: document.getElementById('paymentMode').value,
     discount_amount: document.getElementById('headerDiscount').value || 0,
     patient_incentive_pct: document.getElementById('loyaltyDiscountPct').value || 0,
@@ -301,10 +368,12 @@ function resetCart() {
   cart = [];
   document.getElementById('customerName').value = '';
   document.getElementById('customerPhone').value = '';
+  document.getElementById('checkoutDoctor').value = 'walkin';
+  document.getElementById('checkoutDoctorHint').style.display = 'none';
   document.getElementById('headerDiscount').value = '0';
   document.getElementById('loyaltyDiscountPct').value = '0';
   document.getElementById('paymentMode').value = 'Cash';
-  ['rxPatientName', 'rxPatientAge', 'rxDoctorName', 'rxDoctorId', 'rxDoctorRegNo', 'rxRefNo', 'rxDate'].forEach(id => {
+  ['rxPatientAge', 'rxDoctorName', 'rxDoctorId', 'rxDoctorRegNo', 'rxRefNo', 'rxDate'].forEach(id => {
     document.getElementById(id).value = '';
   });
   document.getElementById('rxPatientGender').value = '';
@@ -379,14 +448,14 @@ async function loadHistory() {
     historyCache = await api.get('/api/sales?' + params.toString());
     renderHistory(historyCache);
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="8" class="empty-state">${escapeHtml(e.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${escapeHtml(e.message)}</td></tr>`;
   }
 }
 
 function renderHistory(sales) {
   const tbody = document.getElementById('historyTbody');
   if (sales.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">No sales recorded yet.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No sales recorded yet.</td></tr>';
     return;
   }
   tbody.innerHTML = sales.map(s => `
@@ -394,6 +463,7 @@ function renderHistory(sales) {
       <td class="mono">${escapeHtml(s.invoice_no)}</td>
       <td>${fmtDate(s.sale_date)}</td>
       <td>${escapeHtml(s.customer_name || '—')}</td>
+      <td>${s.doctor_name ? escapeHtml(s.doctor_name) : '<span class="muted">Walk-in</span>'}</td>
       <td>${s.item_count}</td>
       <td>${fmtMoney(s.total_amount)}</td>
       <td><span class="badge ${PAYMENT_BADGE[s.payment_status] || 'badge-neutral'}">${escapeHtml(s.payment_status)}</span></td>
@@ -430,7 +500,8 @@ async function openHistoryDetail(id) {
         <div class="modal-body">
           <div class="form-grid" style="margin-bottom:10px;">
             <div><div class="muted" style="font-size:11px;">Date</div><strong>${fmtDate(sale.sale_date)}</strong></div>
-            <div><div class="muted" style="font-size:11px;">Customer</div><strong>${escapeHtml(sale.customer_name || '—')}</strong></div>
+            <div><div class="muted" style="font-size:11px;">Patient</div><strong>${escapeHtml(sale.customer_name || '—')}</strong></div>
+            <div><div class="muted" style="font-size:11px;">Doctor</div><strong>${sale.doctor_name ? escapeHtml(sale.doctor_name) : 'Walk-in / No Doctor'}</strong></div>
             <div><div class="muted" style="font-size:11px;">Payment</div><strong>${escapeHtml(sale.payment_mode)}</strong></div>
             <div><div class="muted" style="font-size:11px;">Status</div><span class="badge ${STATUS_BADGE[sale.status] || 'badge-neutral'}">${escapeHtml(sale.status)}</span></div>
           </div>

@@ -104,6 +104,30 @@ the schema in ways that are painful to change later:
   changed hands, and reconciling a refund against an already-paid
   commission is a manual call for the operator, not something this app
   automates.
+- **Every sale now tags a patient and a doctor — not just Schedule H1/X
+  ones — because commission can only be calculated off a doctor that's
+  actually on the sale.** `POST /api/sales` rejects any sale missing
+  either: a patient name (`customer_name`), and a `doctor_id` that's
+  either a registered, active doctor or the literal string `'walkin'`.
+  `'walkin'` has to be chosen explicitly by the cashier — it's a real
+  value the client sends, never a silently-defaulted absence — and
+  resolves to no doctor and zero commission, same outcome as an untagged
+  sale always had. This does raise the stakes on the compliance flag
+  above: doctor-commission exposure is no longer confined to
+  prescription-driven sales, it's now possible on every single sale in
+  the pharmacy (still opt-in per sale via the doctor picker, never
+  automatic) — flagged again here for the same reason as above, and the
+  operator's call to make either way. The sale-wide doctor tag is
+  intentionally a separate concept from the Schedule H1/X prescription's
+  own "prescribing doctor" field: legally a pharmacy must be able to
+  dispense on any qualified doctor's Rx, not only ones registered in its
+  own commission list, so picking Walk-in / No Doctor for the commission
+  tag never blocks an H1/X sale — the prescription panel's free-text
+  doctor name independently satisfies that legal requirement and simply
+  earns no commission when the two diverge. In the common case they're
+  the same person, so the Rx panel's doctor field auto-fills from the
+  sale-wide pick and the cashier only has to touch it when the actual
+  prescriber is someone else.
 - **Patient loyalty/incentive discount is a plain per-sale percentage**,
   not a persistent customer/points record — `sales.patient_incentive_pct`
   and `.patient_incentive_amount` are just another discount lane, kept
