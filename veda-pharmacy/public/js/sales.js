@@ -6,14 +6,14 @@ let cart = []; // { item_id, name, unit, schedule, gst_rate, quantity, discount_
 let historyCache = [];
 
 const RX_SCHEDULES = ['H1', 'X'];
-const PAYMENT_BADGE = { Paid: 'badge-ok', Partial: 'badge-warn', Unpaid: 'badge-danger' };
-const STATUS_BADGE = { Completed: 'badge-ok', Cancelled: 'badge-danger', Returned: 'badge-neutral' };
+const PAYMENT_BADGE = { Paid: 'badge-green', Partial: 'badge-amber', Unpaid: 'badge-red' };
+const STATUS_BADGE = { Completed: 'badge-green', Cancelled: 'badge-red', Returned: 'badge-slate' };
 
 (async function init() {
   currentUser = await initShell({ activeView: 'sales' });
   if (!currentUser) return;
 
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll('.tab').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 
@@ -113,7 +113,7 @@ function debounce(fn, ms) {
 function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
 
 function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.getElementById('newSaleTab').style.display = tab === 'newsale' ? 'block' : 'none';
   document.getElementById('historyTab').style.display = tab === 'history' ? 'block' : 'none';
   if (tab === 'history') loadHistory();
@@ -385,41 +385,61 @@ function resetCart() {
 
 function showReceipt(sale) {
   const modalRoot = document.getElementById('modalRoot');
+  const gst = sale.cgst_amount + sale.sgst_amount;
   modalRoot.innerHTML = `
     <div class="modal-overlay" id="receiptOverlay">
-      <div class="modal" style="max-width:420px;">
+      <div class="modal" style="max-width:460px;">
         <div class="modal-header">
           <h3>Sale Complete</h3>
           <button class="modal-close" onclick="closeModal()">&times;</button>
         </div>
         <div class="modal-body" id="receiptPrintArea">
-          <div style="text-align:center;margin-bottom:14px;">
-            <strong style="font-family:var(--font-display);font-size:16px;color:var(--brand-900);">VEDA Pharmacy</strong>
-            <div class="mono" style="font-size:12.5px;margin-top:4px;">${escapeHtml(sale.invoice_no)}</div>
-            <div class="muted" style="font-size:11.5px;">${fmtDate(sale.sale_date)}</div>
-          </div>
-          <table style="width:100%;font-size:12.5px;margin-bottom:12px;">
-            ${sale.items.map(l => `
-              <tr>
-                <td>${escapeHtml(l.item_name)} × ${l.quantity}</td>
-                <td style="text-align:right;">${fmtMoney(l.line_total)}</td>
-              </tr>
-            `).join('')}
-          </table>
-          <div class="divider"></div>
-          <div class="grn-totals">
+          <div class="a5-bill">
+            <div class="bill-header">
+              <div class="bill-shop-name">${escapeHtml(currentUser.storeName || 'VEDA Pharmacy')}</div>
+              <div class="bill-shop-tag">Licensed Retail Chemist &amp; Druggist</div>
+            </div>
+            <div class="bill-meta">
+              <div class="bill-meta-left">
+                <div>Patient: <strong>${escapeHtml(sale.customer_name || '—')}</strong></div>
+                ${sale.doctor_name ? `<div>Doctor: ${escapeHtml(sale.doctor_name)}</div>` : ''}
+                <div>Payment: ${escapeHtml(sale.payment_mode)}</div>
+              </div>
+              <div class="bill-meta-right">
+                <div class="bill-no">${escapeHtml(sale.invoice_no)}</div>
+                <div>${fmtDate(sale.sale_date)}</div>
+              </div>
+            </div>
             <table>
-              <tr><td>Taxable</td><td>${fmtMoney(sale.taxable_amount)}</td></tr>
-              <tr><td>CGST + SGST</td><td>${fmtMoney(sale.cgst_amount + sale.sgst_amount)}</td></tr>
-              <tr><td>Discount</td><td>-${fmtMoney(sale.discount_amount)}</td></tr>
-              ${sale.patient_incentive_amount > 0 ? `<tr><td>Loyalty Discount</td><td>-${fmtMoney(sale.patient_incentive_amount)}</td></tr>` : ''}
-              <tr class="grand"><td>Total</td><td>${fmtMoney(sale.total_amount)}</td></tr>
+              <thead><tr><th>Item</th><th>Qty</th><th>Amount</th></tr></thead>
+              <tbody>
+                ${sale.items.map(l => `
+                  <tr>
+                    <td>${escapeHtml(l.item_name)}${RX_SCHEDULES.includes(l.schedule) ? ' <span class="rx-badge">Rx</span>' : ''}</td>
+                    <td>${l.quantity}</td>
+                    <td>${fmtMoney(l.line_total)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
             </table>
+            <div class="bill-totals">
+              <div class="totals-box">
+                <div class="tot-row"><span>Taxable</span><span>${fmtMoney(sale.taxable_amount)}</span></div>
+                <div class="tot-row"><span>CGST + SGST</span><span>${fmtMoney(gst)}</span></div>
+                ${sale.discount_amount > 0 ? `<div class="tot-row"><span>Discount</span><span>-${fmtMoney(sale.discount_amount)}</span></div>` : ''}
+                ${sale.patient_incentive_amount > 0 ? `<div class="tot-row"><span>Loyalty Discount</span><span>-${fmtMoney(sale.patient_incentive_amount)}</span></div>` : ''}
+                <div class="tot-row grand"><span>Total</span><span>${fmtMoney(sale.total_amount)}</span></div>
+              </div>
+            </div>
+            <div class="sig-area">
+              <div>Thank you — get well soon.</div>
+              <div class="sig-line">Pharmacist</div>
+            </div>
+            <div class="bill-footer">Computer-generated invoice · Goods once sold are not returnable except as per prevailing policy</div>
           </div>
-          <div class="muted" style="font-size:11px;text-align:center;margin-top:14px;">Payment: ${escapeHtml(sale.payment_mode)}</div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn btn-outline" onclick="closeModal()">Close</button>
+          <button type="button" class="btn btn-secondary" onclick="closeModal()">Close</button>
           <button type="button" class="btn btn-primary" onclick="window.print()">Print Receipt</button>
         </div>
       </div>
@@ -454,10 +474,13 @@ async function loadHistory() {
 
 function renderHistory(sales) {
   const tbody = document.getElementById('historyTbody');
+  const emptyState = document.getElementById('historyEmpty');
   if (sales.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No sales recorded yet.</td></tr>';
+    tbody.innerHTML = '';
+    emptyState.style.display = 'block';
     return;
   }
+  emptyState.style.display = 'none';
   tbody.innerHTML = sales.map(s => `
     <tr${s.status === 'Cancelled' ? ' style="opacity:0.55;"' : ''}>
       <td class="mono">${escapeHtml(s.invoice_no)}</td>
@@ -466,9 +489,9 @@ function renderHistory(sales) {
       <td>${s.doctor_name ? escapeHtml(s.doctor_name) : '<span class="muted">Walk-in</span>'}</td>
       <td>${s.item_count}</td>
       <td>${fmtMoney(s.total_amount)}</td>
-      <td><span class="badge ${PAYMENT_BADGE[s.payment_status] || 'badge-neutral'}">${escapeHtml(s.payment_status)}</span></td>
-      <td><span class="badge ${STATUS_BADGE[s.status] || 'badge-neutral'}">${escapeHtml(s.status)}</span></td>
-      <td><button class="btn btn-outline btn-sm" onclick="openHistoryDetail(${s.id})">View</button></td>
+      <td><span class="badge ${PAYMENT_BADGE[s.payment_status] || 'badge-slate'}">${escapeHtml(s.payment_status)}</span></td>
+      <td><span class="badge ${STATUS_BADGE[s.status] || 'badge-slate'}">${escapeHtml(s.status)}</span></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openHistoryDetail(${s.id})">View</button></td>
     </tr>
   `).join('');
 }
@@ -503,7 +526,7 @@ async function openHistoryDetail(id) {
             <div><div class="muted" style="font-size:11px;">Patient</div><strong>${escapeHtml(sale.customer_name || '—')}</strong></div>
             <div><div class="muted" style="font-size:11px;">Doctor</div><strong>${sale.doctor_name ? escapeHtml(sale.doctor_name) : 'Walk-in / No Doctor'}</strong></div>
             <div><div class="muted" style="font-size:11px;">Payment</div><strong>${escapeHtml(sale.payment_mode)}</strong></div>
-            <div><div class="muted" style="font-size:11px;">Status</div><span class="badge ${STATUS_BADGE[sale.status] || 'badge-neutral'}">${escapeHtml(sale.status)}</span></div>
+            <div><div class="muted" style="font-size:11px;">Status</div><span class="badge ${STATUS_BADGE[sale.status] || 'badge-slate'}">${escapeHtml(sale.status)}</span></div>
           </div>
 
           <table class="line-table" style="width:100%;border-collapse:collapse;">

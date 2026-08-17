@@ -88,39 +88,49 @@
     </div>
   </div>
   <div class="page-content">
-    <div class="page-header">
-      <div>
-        <h1>POS / Sales</h1>
-        <div class="sub">Stock is drawn oldest-expiry-first automatically — you just pick the item and quantity.</div>
-      </div>
+    <div class="section-header">
+      <div class="section-title">POS / Sales</div>
     </div>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Stock is drawn oldest-expiry-first automatically — you just pick the item and quantity.</p>
 
-    <div class="tab-bar">
-      <button class="tab-btn active" data-tab="newsale">New Sale</button>
-      <button class="tab-btn" data-tab="history">Sales History</button>
+    <div class="tabs">
+      <div class="tab active" data-tab="newsale">🧾 New Sale</div>
+      <div class="tab" data-tab="history">📋 Sales History</div>
     </div>
 
     <div id="newSaleTab">
       <div class="pos-layout">
         <div>
           <div class="card">
-            <div class="item-search-wrap">
-              <input type="text" id="itemSearchInput" placeholder="Search item by name, generic name or HSN to add to cart…" autocomplete="off">
-              <div class="item-search-results" id="itemSearchResults"></div>
+            <div class="card-header">
+              <span class="card-title">💊 Add Items</span>
+            </div>
+            <div class="card-body">
+              <div class="item-search-wrap" style="margin-bottom:0;">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="itemSearchInput" placeholder="Search item by name, generic name or HSN to add to cart…" autocomplete="off" style="padding-left:36px;">
+                <div class="item-search-results" id="itemSearchResults"></div>
+              </div>
             </div>
 
-            <table class="cart-table">
-              <thead>
-                <tr><th>Item</th><th>Available</th><th>Qty</th><th>Disc%</th><th>Est. Total</th><th></th></tr>
-              </thead>
-              <tbody id="cartTbody">
-                <tr><td colspan="6" class="empty-state">Search above to add items to the cart.</td></tr>
-              </tbody>
-            </table>
+            <div class="table-wrap">
+              <table class="cart-table">
+                <thead>
+                  <tr><th>Item</th><th>Available</th><th>Qty</th><th>Disc%</th><th>Est. Total</th><th></th></tr>
+                </thead>
+                <tbody id="cartTbody">
+                  <tr><td colspan="6" class="empty-state">Search above to add items to the cart.</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
 
         <div class="card checkout-panel">
+          <div class="card-header">
+            <span class="card-title">👤 Patient &amp; Checkout</span>
+          </div>
+          <div class="card-body">
           <div class="form-field">
             <label>Patient Name *</label>
             <input type="text" id="customerName" placeholder="Required for every sale">
@@ -210,29 +220,49 @@
           </div>
 
           <button class="btn btn-primary" id="checkoutBtn" style="width:100%;justify-content:center;margin-top:14px;">Complete Sale</button>
+          </div>
         </div>
       </div>
     </div>
 
     <div id="historyTab" style="display:none;">
-      <div class="search-bar">
-        <input type="search" id="historySearch" placeholder="Search by customer name, phone or invoice no…">
-        <select id="historyPaymentFilter">
-          <option value="">All Payment Status</option>
-          <option value="Paid">Paid</option>
-          <option value="Partial">Partial</option>
-          <option value="Unpaid">Unpaid</option>
-        </select>
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-body">
+          <div class="filter-row" style="margin-bottom:0;">
+            <div class="search-wrap" style="flex:1;min-width:240px;">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="historySearch" placeholder="Search by customer name, phone or invoice no…">
+            </div>
+            <select id="historyPaymentFilter" style="width:180px;">
+              <option value="">All Payment Status</option>
+              <option value="Paid">Paid</option>
+              <option value="Partial">Partial</option>
+              <option value="Unpaid">Unpaid</option>
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="card" style="padding:0;overflow-x:auto;">
-        <table>
-          <thead>
-            <tr><th>Invoice No.</th><th>Date</th><th>Patient</th><th>Doctor</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr>
-          </thead>
-          <tbody id="historyTbody">
-            <tr><td colspan="9" class="empty-state">Loading sales…</td></tr>
-          </tbody>
-        </table>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Sales History</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Invoice No.</th><th>Date</th><th>Patient</th><th>Doctor</th><th>Items</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody id="historyTbody">
+              <tr><td colspan="9" class="empty-state">Loading sales…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="historyEmpty" style="display:none;">
+          <div class="empty-state">
+            <div class="empty-icon">🧾</div>
+            <h3>No sales recorded yet</h3>
+            <p>Ring up your first sale from the New Sale tab.</p>
+          </div>
+        </div>
       </div>
     </div>
   </div>
