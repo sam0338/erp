@@ -212,6 +212,37 @@ function migrate(db) {
     `);
     console.log('✔ Migrated: widened stock_adjustments.adjustment_type CHECK constraint');
   }
+
+  // Direct Stock In — old/opening stock a store already has on its shelves
+  // when it adopts this app, with no distributor invoice to key a GRN off.
+  // See the note in schema.sql on why this is its own table rather than
+  // more nullable columns on purchases.
+  ensureTable(db, 'stock_in_entries', `
+    CREATE TABLE stock_in_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      store_id INTEGER NOT NULL,
+      item_id INTEGER NOT NULL,
+      batch_id INTEGER NOT NULL,
+      entry_no TEXT,
+      quantity INTEGER NOT NULL,
+      purchase_rate REAL NOT NULL DEFAULT 0,
+      mrp REAL NOT NULL DEFAULT 0,
+      distributor_id INTEGER,
+      supplier_name TEXT,
+      reference_no TEXT,
+      notes TEXT,
+      source TEXT NOT NULL DEFAULT 'Manual' CHECK (source IN ('Manual', 'Bulk Excel Import')),
+      created_by_user_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (store_id) REFERENCES stores(id),
+      FOREIGN KEY (item_id) REFERENCES items(id),
+      FOREIGN KEY (batch_id) REFERENCES batches(id),
+      FOREIGN KEY (distributor_id) REFERENCES distributors(id),
+      FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+    )
+  `);
+  db.exec('CREATE INDEX IF NOT EXISTS idx_stock_in_entries_store ON stock_in_entries(store_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_stock_in_entries_item ON stock_in_entries(item_id)');
 }
 
 module.exports = { migrate, ensureColumn, ensureTable };

@@ -357,6 +357,85 @@ the schema in ways that are painful to change later:
     (caught by an end-to-end smoke test against a running server, not by
     inspection — a `POST /api/batches/adjustments` with `'Sample'` came
     back rejected even after the schema/migration fix alone).
+- **Direct Stock In + bulk Excel import, dedicated Stock Out page, and
+  final branding — a second round of MediPro parity, this time aimed at
+  real onboarding.** The operator flagged a genuine gap: a store adopting
+  VEDA already has shelf stock, and that stock was never "received" through
+  the system, so there's no distributor invoice to key a GRN off (`POST
+  /api/purchases` requires one). Three more things were built to close
+  this out:
+  - **Direct Stock In** (`stock_in_entries` table, `routes/stock-in.js`,
+    `public/stock-in.html`) — a manual entry form (medicine, batch, qty,
+    rate, MRP, optional distributor/supplier/reference) that creates a
+    `batches` row with no `purchase_item_id`, exactly like the "opening-
+    stock entries" case that column's own comment already anticipated.
+    Deliberately its own table rather than more nullable columns on
+    `purchases` — reusing `purchases` would have meant widening its
+    NOT NULL `distributor_id`/`invoice_no` via a full table rebuild (the
+    same risk class as the `stock_adjustments` CHECK migration, but on the
+    one table every payment/ledger figure is keyed off) for a record that
+    structurally isn't a purchase: no GST input-tax-credit split, no
+    `payment_status`, often no distributor at all. It's also deliberately
+    **not** fed into the distributor ledger even when a distributor is
+    set — these entries carry no `amount_paid` concept, so mixing them
+    into a payables statement would misstate what's actually owed.
+  - **Bulk Excel import** (`GET /api/stock-in/template`, `POST
+    /api/stock-in/bulk`) — downloads a `.xlsx` starter sheet (headers +
+    one clearly-marked example row + an Instructions tab) and accepts it
+    back filled in, one row per batch. Each row is matched against the
+    Item Master by name (case-insensitive); no match creates the item on
+    the spot from that row's columns. Every row runs in its own
+    transaction, so one bad row (caught and reported with its row number
+    and exact reason) never aborts the rest of the file — verified with a
+    test workbook mixing an existing-item row, a new-item row, and a
+    deliberately-broken row, which came back exactly as `{imported: 2,
+    itemsCreated: 1, errors: [{row: 4, message: "Expiry Date is
+    required"}]}`. Built on **`exceljs`, not the more commonly-reached-for
+    `xlsx` (SheetJS) package** — `xlsx` currently ships two open,
+    unpatched high-severity advisories on npm (prototype pollution +
+    ReDoS) with no fix available from that registry release, which isn't
+    an acceptable trade for parsing files a pharmacy operator uploads;
+    `exceljs` doesn't carry that exposure. The upload itself is still
+    capped at 5MB and `.xlsx`-only as further containment.
+  - **Stock Out / Returns** (`public/stock-out.html`) — a dedicated
+    top-level page mirroring MediPro's layout (medicine picker, type,
+    quantity, reason, a "Recent Stock Out" log), requested explicitly
+    rather than left folded into the Batches & Stock screen's existing
+    per-row Adjust action. Both now share the same `POST
+    /api/batches/adjustments` backend and the same `stock_adjustments`
+    table — no duplicate logic, just two entry points into the same
+    action (comparable to how "New Sale" on the Dashboard and the POS nav
+    link both land on the same page). Unlike MediPro's flat per-product
+    stock count, VEDA tracks stock per batch/lot, so this page cascades
+    medicine → batch (FEFO-ordered) before the type/qty/reason fields.
+  - **Categories and Batches & Stock brought closer to MediPro's actual
+    layout** — the Categories cards were rebuilt to MediPro's exact
+    structure (icon top-left, edit/delete icons top-right, name,
+    description, teal medicine count), and Batches & Stock gained Category
+    and Rx/OTC badge columns (`i.category` added to `GET /api/batches`'s
+    query) matching MediPro's Inventory table — MOQ/stock-status columns
+    were deliberately left out of that table, since those are properties
+    of an *item's total* stock across every lot, not of the single batch
+    row each line here represents; showing them per-lot would misleadingly
+    imply each lot has its own reorder threshold. That comparison already
+    lives correctly at the item level on the Dashboard and Reports > Low
+    Stock.
+  - **Branding** — the operator supplied a reference VEDA logo (a blue-to-
+    green gradient "V" mark with a pill-and-leaf accent). It arrived as a
+    chat image attachment with no way for this tool to pull the original
+    file's bytes onto disk, so it was rebuilt as two hand-authored SVGs
+    instead of used verbatim — `public/img/logo-mark.svg` (icon only) and
+    `logo-full.svg` (mark + wordmark + tagline lockup) — and wired in
+    everywhere a placeholder previously stood: every page's favicon (was a
+    dead `/img/favicon.ico` link — that file never existed) and sidebar
+    icon, both of login.html's badges, license.html's badge, and the POS
+    receipt header. SVG throughout, not a rasterized PNG/ICO, so it stays
+    crisp from a 16px favicon up to the login panel. **Known gap**:
+    `packaging/app-icon.ico` (the Windows installer/desktop-shortcut icon)
+    still shows the old green pharmacy-cross — converting the new SVG into
+    a proper multi-resolution `.ico` needs a rasterizer this environment
+    doesn't have installed; still worth doing before the next installer
+    build, same as the note already carried in What's Next below.
 
 ## Database schema
 
@@ -371,6 +450,7 @@ See `db/schema.sql` for the full, commented definition. Summary:
 | `purchase_orders`, `purchase_order_items` | Requests out to a distributor (Draft/Sent/Cancelled) — CRUD live; "GRN status" is always derived (see Architecture Decisions), never stored |
 | `purchases`, `purchase_items` | GRN header + lines — CRUD live; saving a GRN creates one `batches` row per line in the same transaction, and bumps the matching PO line's `quantity_received` if `purchase_order_id` is set |
 | `batches` | Store-scoped stock lots — batch no., mfg/expiry dates, quantity, purchase rate, MRP — viewable/searchable live, with expiry status (expired/near/ok) computed per row |
+| `stock_in_entries` | Direct/opening stock with no GRN behind it (`public/stock-in.html`, manual or bulk Excel import) — each row creates one `batches` lot; never feeds the distributor ledger |
 | `categories` | Shared managed picklist (name/icon/description) for the Item Master's Category field — CRUD live |
 | `sales`, `sale_items` | POS invoices — live; each line records the exact FEFO-selected `batch_id` it was sold from, split across lots automatically if one lot doesn't cover the quantity. Also carries the patient loyalty discount and (see Architecture Decisions) doctor commission fields, both snapshotted at checkout |
 | `sale_returns`, `sale_return_items` | Partial-line returns against a Completed sale — live; restores stock to the originating batch and proportionally claws back any doctor commission, without ever mutating the original sale |
@@ -475,11 +555,12 @@ veda-pharmacy/
 ├── routes/
 │   ├── auth.js, license.js, items.js, distributors.js, purchases.js, purchase-orders.js,
 │   │   batches.js, sales.js, prescriptions.js, doctors.js, reports.js, stores.js,
-│   │   categories.js, movements.js
+│   │   categories.js, movements.js, stock-in.js
 ├── utils/
-│   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo, generatePoNo
+│   ├── helpers.js           # logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo, generatePoNo, generateStockInNo
 │   └── licensing.js         # Ed25519 verify/activate, trial clock
 ├── public/                  # static frontend — one HTML page per module + shared shell.js/api.js/style.css
+│   └── img/                 # logo-mark.svg, logo-full.svg — see Architecture Decisions on Branding
 ├── license-tool/            # VENDOR-ONLY key generator — never ship this folder
 ├── packaging/                # Silent launcher (.vbs) + NSIS installer build — see BUILD_INSTRUCTIONS.md
 └── uploads/rx/               # prescription photos (gitignored, .gitkeep only)

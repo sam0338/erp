@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 140" width="480" height="140" role="img" aria-label="VEDA Pharmacy Management App">
+  <defs>
+    <linearGradient id="vedaBlue2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3FA9E8"/>
+      <stop offset="100%" stop-color="#0B3D63"/>
+    </linearGradient>
+    <linearGradient id="vedaGreen2" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6FDB8F"/>
+      <stop offset="100%" stop-color="#0F8A4B"/>
+    </linearGradient>
+    <linearGradient id="vedaWordmark" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#0B3D63"/>
+      <stop offset="60%" stop-color="#0F5C7A"/>
+      <stop offset="100%" stop-color="#0F8A4B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- mark -->
+  <g transform="translate(4 8) scale(0.86)">
+    <path d="M 16 10 L 47 83" fill="none" stroke="url(#vedaBlue2)" stroke-width="19" stroke-linecap="round"/>
+    <path d="M 84 10 L 53 83" fill="none" stroke="url(#vedaGreen2)" stroke-width="19" stroke-linecap="round"/>
+    <path d="M 66 16 C 78 12, 88 20, 86 32 C 74 32, 64 26, 66 16 Z" fill="#1F9D55"/>
+    <g transform="translate(50 60) rotate(45)">
+      <rect x="-15" y="-6.5" width="30" height="13" rx="6.5" fill="#FFFFFF" stroke="#0B3D63" stroke-width="2"/>
+      <path d="M -15 -6.5 H 0 V 6.5 H -15 A 6.5 6.5 0 0 1 -15 -6.5 Z" fill="url(#vedaBlue2)"/>
+    </g>
+  </g>
+
+  <!-- wordmark -->
+  <text x="112" y="66" font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="52" letter-spacing="1" fill="url(#vedaWordmark)">VEDA</text>
+  <text x="114" y="86" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="14" letter-spacing="1.5" fill="#0F8A4B">PHARMACY MANAGEMENT</text>
+
+  <!-- tagline, flanked by rules -->
+  <line x1="112" y1="112" x2="185" y2="112" stroke="#0B3D63" stroke-width="1.2" opacity="0.55"/>
+  <text x="240" y="117" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="13" fill="#0B3D63" text-anchor="middle">Smart | Simple | Secure</text>
+  <line x1="296" y1="112" x2="369" y2="112" stroke="#0B3D63" stroke-width="1.2" opacity="0.55"/>
+</svg>

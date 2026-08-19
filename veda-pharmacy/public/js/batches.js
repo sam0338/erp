@@ -4,6 +4,7 @@ let batchesCache = [];
 
 const EXPIRY_BADGE = { expired: 'badge-red', near: 'badge-amber', ok: 'badge-green' };
 const ADJUSTMENT_TYPES = ['Expired', 'Damaged', 'Lost', 'Correction', 'Return to Supplier', 'Sample'];
+const RX_SCHEDULES = ['H1', 'X'];
 
 (async function init() {
   currentUser = await initShell({ activeView: 'batches' });
@@ -72,18 +73,22 @@ function renderBatchesTable(batches) {
     else if (b.expiry_status === 'near') expiryLabel = `${days}d left`;
     else expiryLabel = fmtDate(b.expiry_date);
 
+    const isRx = RX_SCHEDULES.includes(b.schedule);
+
     return `
       <tr${b.quantity <= 0 ? ' style="opacity:0.55;"' : ''}>
         <td>
           <strong>${escapeHtml(b.item_name)}</strong>
-          <div class="muted" style="font-size:11.5px;">${escapeHtml(b.unit)}${b.schedule !== 'OTC' ? ' · ' + escapeHtml(b.schedule) : ''}</div>
+          <div class="muted" style="font-size:11.5px;">${escapeHtml(b.unit)}</div>
         </td>
+        <td>${b.category ? `<span class="badge badge-teal">${escapeHtml(b.category)}</span>` : '<span class="badge badge-slate">—</span>'}</td>
         <td class="mono">${escapeHtml(b.batch_no)}</td>
         <td>${fmtDate(b.mfg_date)}</td>
         <td><span class="badge ${EXPIRY_BADGE[b.expiry_status] || 'badge-slate'}">${expiryLabel}</span></td>
         <td>${b.quantity}</td>
         <td>${fmtMoney(b.purchase_rate)}</td>
         <td>${fmtMoney(b.mrp)}</td>
+        <td>${isRx ? `<span class="badge badge-purple">Rx</span>` : '<span class="badge badge-slate">OTC</span>'}</td>
         <td>${escapeHtml(b.distributor_name || '—')}</td>
         <td>${b.quantity > 0 ? `<button class="btn btn-secondary btn-sm" onclick="openAdjustModal(${b.id})">Adjust</button>` : ''}</td>
       </tr>

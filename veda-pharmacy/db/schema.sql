@@ -318,6 +318,47 @@ CREATE TABLE IF NOT EXISTS batches (
     FOREIGN KEY (distributor_id) REFERENCES distributors(id)
 );
 
+-- ---------- STOCK IN ENTRIES (direct/opening stock, no GRN) ----------
+-- A store adopting this app almost never starts from zero — it already has
+-- shelf stock, and that stock was never "received" through this system, so
+-- there's no distributor invoice to key a GRN off (purchases/purchase_items
+-- above always require one). This is the other on-ramp into `batches`:
+-- deliberately a separate, minimal table rather than another nullable-
+-- everything row bolted onto `purchases` — reusing `purchases` would have
+-- meant widening its NOT NULL distributor_id/invoice_no via a full table
+-- rebuild (the same risk class as the stock_adjustments CHECK migration,
+-- but on the one table every payment/ledger figure is keyed off) for a
+-- record that structurally isn't a purchase: no GST input-tax-credit
+-- split, no payment_status, and often no distributor at all. Deliberately
+-- NOT fed into the distributor ledger (routes/distributors.js) even when
+-- distributor_id is set — these entries carry no amount_paid/payment_status
+-- concept, so mixing them into a payables statement would misstate what's
+-- actually owed; a distributor here is purely "for the record."
+-- Surfaces in the Item Movement Log (routes/movements.js) as a 'Stock In'
+-- row alongside Purchase/Sale/Return/Adjustment.
+CREATE TABLE IF NOT EXISTS stock_in_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    batch_id INTEGER NOT NULL,          -- the batches row this entry created
+    entry_no TEXT,
+    quantity INTEGER NOT NULL,
+    purchase_rate REAL NOT NULL DEFAULT 0,
+    mrp REAL NOT NULL DEFAULT 0,
+    distributor_id INTEGER,             -- optional, informational only (see note above)
+    supplier_name TEXT,                 -- free-text fallback when there's no registered distributor
+    reference_no TEXT,                  -- old invoice/PO no., purely informational
+    notes TEXT,
+    source TEXT NOT NULL DEFAULT 'Manual' CHECK (source IN ('Manual', 'Bulk Excel Import')),
+    created_by_user_id INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (store_id) REFERENCES stores(id),
+    FOREIGN KEY (item_id) REFERENCES items(id),
+    FOREIGN KEY (batch_id) REFERENCES batches(id),
+    FOREIGN KEY (distributor_id) REFERENCES distributors(id),
+    FOREIGN KEY (created_by_user_id) REFERENCES users(id)
+);
+
 -- ---------- SALES (POS) ----------
 CREATE TABLE IF NOT EXISTS sales (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -457,3 +498,5 @@ CREATE INDEX IF NOT EXISTS idx_stock_adjustments_batch ON stock_adjustments(batc
 CREATE INDEX IF NOT EXISTS idx_purchase_orders_store ON purchase_orders(store_id);
 CREATE INDEX IF NOT EXISTS idx_purchase_order_items_po ON purchase_order_items(purchase_order_id);
 CREATE INDEX IF NOT EXISTS idx_purchases_po ON purchases(purchase_order_id);
+CREATE INDEX IF NOT EXISTS idx_stock_in_entries_store ON stock_in_entries(store_id);
+CREATE INDEX IF NOT EXISTS idx_stock_in_entries_item ON stock_in_entries(item_id);

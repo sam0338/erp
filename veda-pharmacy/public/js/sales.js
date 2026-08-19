@@ -410,6 +410,7 @@ function showReceipt(sale) {
         <div class="modal-body" id="receiptPrintArea">
           <div class="a5-bill">
             <div class="bill-header">
+              <img src="/img/logo-mark.svg" alt="" width="30" height="30" style="display:block;margin:0 auto 3px;">
               <div class="bill-shop-name">${escapeHtml(currentUser.storeName || 'VEDA Pharmacy')}</div>
               <div class="bill-shop-tag">${escapeHtml((currentStore && currentStore.tagline) || 'Licensed Retail Chemist & Druggist')}</div>
             </div>

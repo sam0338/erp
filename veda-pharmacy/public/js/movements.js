@@ -1,7 +1,7 @@
 // VEDA Pharmacy - Item Movement Log
 let currentUser = null;
 
-const TYPE_BADGE = { Purchase: 'badge-green', Sale: 'badge-slate', Return: 'badge-green', Adjustment: 'badge-red' };
+const TYPE_BADGE = { Purchase: 'badge-green', 'Stock In': 'badge-green', Sale: 'badge-slate', Return: 'badge-green', Adjustment: 'badge-red' };
 
 (async function init() {
   currentUser = await initShell({ activeView: 'movements' });

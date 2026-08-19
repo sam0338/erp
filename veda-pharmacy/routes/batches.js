@@ -14,7 +14,7 @@ router.get('/', (req, res) => {
   const nearDays = parseInt(near_days, 10) || 90;
 
   let query = `
-    SELECT b.*, i.name AS item_name, i.unit, i.schedule, i.gst_rate,
+    SELECT b.*, i.name AS item_name, i.unit, i.schedule, i.gst_rate, i.category,
       d.name AS distributor_name,
       CASE
         WHEN b.expiry_date < date('now') THEN 'expired'

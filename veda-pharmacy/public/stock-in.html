@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock In — VEDA Pharmacy</title>
+<link rel="icon" type="image/svg+xml" href="/img/logo-mark.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div id="trialBanner" style="display:none;"></div>
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><img src="/img/logo-mark.svg" alt="VEDA" style="width:100%;height:100%;object-fit:contain;"></div>
+    <div class="shop-name">VEDA<small>Pharmacy</small></div>
+    <div class="shop-sub" id="storeTag">Loading store…</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="nav-section-label">Overview</div>
+    <a class="nav-item" data-href="dashboard" href="/dashboard.html"><span class="nav-icon">📊</span>Dashboard</a>
+
+    <div class="nav-section-label">Catalog</div>
+    <a class="nav-item" data-href="items" href="/items.html"><span class="nav-icon">💊</span>Item Master</a>
+    <a class="nav-item" data-href="categories" href="/categories.html"><span class="nav-icon">🏷️</span>Categories</a>
+
+    <div class="nav-section-label">Inventory</div>
+    <a class="nav-item" data-href="batches" href="/batches.html"><span class="nav-icon">📦</span>Batches &amp; Stock</a>
+    <a class="nav-item" data-href="stock-in" href="/stock-in.html"><span class="nav-icon">📥</span>Stock In</a>
+    <a class="nav-item" data-href="stock-out" href="/stock-out.html"><span class="nav-icon">📤</span>Stock Out / Returns</a>
+    <a class="nav-item" data-href="movements" href="/movements.html"><span class="nav-icon">📜</span>Item Movement Log</a>
+
+    <div class="nav-section-label">Purchases</div>
+    <a class="nav-item" data-href="distributors" href="/distributors.html"><span class="nav-icon">🚚</span>Distributors</a>
+    <a class="nav-item" data-href="purchase-orders" href="/purchase-orders.html"><span class="nav-icon">📝</span>Purchase Orders</a>
+    <a class="nav-item" data-href="purchases" href="/purchases.html"><span class="nav-icon">📥</span>Purchases / GRN</a>
+
+    <div class="nav-section-label">Sales</div>
+    <a class="nav-item" data-href="sales" href="/sales.html"><span class="nav-icon">🧾</span>POS / Sales</a>
+    <a class="nav-item" data-href="prescriptions" href="/prescriptions.html"><span class="nav-icon">📋</span>Prescriptions</a>
+    <a class="nav-item" data-href="doctors" href="/doctors.html"><span class="nav-icon">🩺</span>Doctors</a>
+
+    <div class="nav-section-label">Insights</div>
+    <a class="nav-item" data-href="reports" href="/reports.html"><span class="nav-icon">📑</span>Reports</a>
+
+    <div id="adminNavGroup" style="display:none;">
+      <div class="nav-section-label">Admin</div>
+      <a class="nav-item" data-href="stores" href="/stores.html"><span class="nav-icon">🏬</span>Stores</a>
+      <a class="nav-item" data-href="settings" href="/settings.html"><span class="nav-icon">⚙️</span>Shop Settings</a>
+    </div>
+  </div>
+  <div class="sidebar-bottom">
+    <div class="user-chip">
+      <span class="name" id="userName">—</span>
+      <span class="role" id="userRole">—</span>
+    </div>
+    <button class="btn btn-secondary btn-sm logout-btn" id="logoutBtn" style="width:100%;justify-content:center;">Sign out</button>
+  </div>
+</nav>
+
+<div id="main">
+  <div class="topbar">
+    <div class="topbar-title">Stock In</div>
+    <div class="topbar-right">
+      <div class="topbar-date" id="topbarDate"></div>
+    </div>
+  </div>
+  <div class="page-content">
+    <div class="section-header">
+      <div class="section-title">Stock In — Receive Inventory</div>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">
+      For stock that never came through a distributor GRN — opening balance when you first set up VEDA, or any
+      other stock you're entering by hand. Buying fresh from a distributor with an invoice? Use
+      <a href="/purchases.html">Purchases / GRN</a> instead so it's tracked as a proper payable.
+    </p>
+
+    <div class="two-col" style="align-items:start;">
+      <div style="display:flex;flex-direction:column;gap:20px;">
+        <div class="card">
+          <div class="card-header"><span class="card-title">➕ Add Stock</span></div>
+          <div class="card-body">
+            <form id="stockInForm">
+              <div class="form-grid">
+                <div class="form-grid form-grid-2">
+                  <div class="form-group">
+                    <label class="form-label">Select Medicine *</label>
+                    <select id="si-item" required>
+                      <option value="">-- Select Medicine --</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Batch Number *</label>
+                    <input type="text" id="si-batch" placeholder="e.g. BTH2024001">
+                  </div>
+                </div>
+                <div class="form-grid form-grid-3">
+                  <div class="form-group">
+                    <label class="form-label">Quantity *</label>
+                    <input type="number" id="si-qty" placeholder="0" min="1">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Purchase Price (₹) *</label>
+                    <input type="number" id="si-purchase" placeholder="0.00" step="0.01">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">MRP (₹) *</label>
+                    <input type="number" id="si-mrp" placeholder="0.00" step="0.01">
+                  </div>
+                </div>
+                <div class="form-grid form-grid-3">
+                  <div class="form-group">
+                    <label class="form-label">Mfg. Date</label>
+                    <input type="date" id="si-mfg">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Expiry Date *</label>
+                    <input type="date" id="si-expiry">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Distributor (if known)</label>
+                    <select id="si-distributor">
+                      <option value="">-- None / Unknown --</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-grid form-grid-2">
+                  <div class="form-group">
+                    <label class="form-label">Supplier Name</label>
+                    <input type="text" id="si-supplier" placeholder="e.g. Old Stock / Opening Balance">
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Reference / Old Invoice No.</label>
+                    <input type="text" id="si-reference" placeholder="Optional">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Notes</label>
+                  <textarea id="si-notes" placeholder="Optional notes..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">📥 Add Stock</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-title">📊 Bulk Import from Excel</span></div>
+          <div class="card-body">
+            <p class="muted" style="font-size:12.5px;margin-bottom:12px;">
+              Onboarding a store with an existing stock list? Download the template, fill in one row per
+              batch, and upload it here — new medicines not yet in your Item Master are created automatically.
+            </p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+              <a class="btn btn-secondary btn-sm" href="/api/stock-in/template">⬇️ Download Excel Template</a>
+            </div>
+            <form id="bulkImportForm">
+              <div class="form-group">
+                <label class="form-label">Upload Filled Template (.xlsx)</label>
+                <input type="file" id="bulk-file" accept=".xlsx">
+              </div>
+              <button type="submit" class="btn btn-accent btn-sm" id="bulkImportBtn">📤 Import</button>
+            </form>
+            <div id="bulkImportResult" style="margin-top:14px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">📜 Recent Stock In</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Medicine</th><th>Qty</th><th>Batch</th><th>Source</th></tr>
+            </thead>
+            <tbody id="recentStockInTbody">
+              <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+<div id="modalRoot"></div>
+
+<script src="/js/api.js"></script>
+<script src="/js/shell.js"></script>
+<script src="/js/stock-in.js"></script>
+</body>
+</html>

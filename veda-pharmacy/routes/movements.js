@@ -4,12 +4,12 @@ const db = require('../db/connection');
 const router = express.Router();
 
 // GET /api/movements - a unified, read-only, chronological ledger of every
-// stock-affecting event for the current store: GRN receipts (in), sales
-// (out), sale returns (in) and manual stock adjustments (out) — matching
-// MediStore Pro's Item Movement Log. This is pure aggregation over
-// existing rows, nothing is stored separately, so there's no way for it to
-// drift from the batches/sales/purchases tables it reads.
-// ?item_id=  ?type=Purchase|Sale|Return|Adjustment  ?q=  ?limit=200
+// stock-affecting event for the current store: GRN receipts (in), direct
+// stock in (in), sales (out), sale returns (in) and manual stock
+// adjustments (out) — matching MediStore Pro's Item Movement Log. This is
+// pure aggregation over existing rows, nothing is stored separately, so
+// there's no way for it to drift from the tables it reads.
+// ?item_id=  ?type=Purchase|Stock In|Sale|Return|Adjustment  ?q=  ?limit=200
 router.get('/', (req, res) => {
   const storeId = req.session.storeId;
   const { item_id, type, q } = req.query;
@@ -31,6 +31,22 @@ router.get('/', (req, res) => {
     const params = [storeId];
     if (item_id) { sql += ' AND i.id = ?'; params.push(item_id); }
     if (q) { sql += ' AND (i.name LIKE ? OR p.grn_no LIKE ?)'; params.push(`%${q}%`, `%${q}%`); }
+    rows.push(...db.prepare(sql).all(...params));
+  }
+
+  if (!type || type === 'Stock In') {
+    let sql = `
+      SELECT sie.created_at AS date, i.id AS item_id, i.name AS item_name, 'Stock In' AS type,
+        sie.quantity AS quantity, sie.entry_no AS reference,
+        ('Batch ' || b.batch_no || COALESCE(' · ' || sie.supplier_name, '')) AS note
+      FROM stock_in_entries sie
+      JOIN items i ON sie.item_id = i.id
+      JOIN batches b ON sie.batch_id = b.id
+      WHERE sie.store_id = ?
+    `;
+    const params = [storeId];
+    if (item_id) { sql += ' AND i.id = ?'; params.push(item_id); }
+    if (q) { sql += ' AND (i.name LIKE ? OR sie.entry_no LIKE ?)'; params.push(`%${q}%`, `%${q}%`); }
     rows.push(...db.prepare(sql).all(...params));
   }
 

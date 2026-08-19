@@ -59,4 +59,15 @@ function generateReturnNo(db, storeId) {
   return `RET-${year}-${seq}`;
 }
 
-module.exports = { logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo, generatePoNo };
+// SI-YYYY-00001, sequential per store within the calendar year — same
+// counting-not-a-counter-table pattern as the other generators above.
+function generateStockInNo(db, storeId) {
+  const year = dayjs().format('YYYY');
+  const row = db.prepare(
+    `SELECT COUNT(*) as c FROM stock_in_entries WHERE store_id = ? AND entry_no LIKE ?`
+  ).get(storeId, `SI-${year}-%`);
+  const seq = String(row.c + 1).padStart(5, '0');
+  return `SI-${year}-${seq}`;
+}
+
+module.exports = { logActivity, generateGrnNo, generateInvoiceNo, generateReturnNo, generatePoNo, generateStockInNo };

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Stores — VEDA Pharmacy</title>
+<title>Stock Out / Returns — VEDA Pharmacy</title>
 <link rel="icon" type="image/svg+xml" href="/img/logo-mark.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -61,53 +61,74 @@
 
 <div id="main">
   <div class="topbar">
-    <div class="topbar-title">Stores</div>
+    <div class="topbar-title">Stock Out / Returns</div>
     <div class="topbar-right">
       <div class="topbar-date" id="topbarDate"></div>
     </div>
   </div>
   <div class="page-content">
     <div class="section-header">
-      <div class="section-title">Stores</div>
-      <button class="btn btn-primary" id="addStoreBtn">➕ Add Store</button>
+      <div class="section-title">Stock Out / Returns</div>
     </div>
-    <p class="muted" style="font-size:12.5px;margin:-10px 0 16px;">Every branch this install operates — switch between them from the sidebar.</p>
-
-    <div class="card" style="margin-bottom:16px;">
-      <div class="card-body">
-        <label style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--slate);white-space:nowrap;">
-          <input type="checkbox" id="includeInactive" style="width:auto;"> Show inactive
-        </label>
+    <div class="two-col" style="align-items:start;">
+      <div class="card">
+        <div class="card-header"><span class="card-title">📤 Record Manual Stock Out</span></div>
+        <div class="card-body">
+          <div class="alert alert-info">ℹ️ Billing already reduces stock automatically. Use this for damages, expiry write-offs, returns to a supplier, or manual corrections instead.</div>
+          <form id="stockOutForm">
+            <div class="form-grid">
+              <div class="form-grid form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Select Medicine *</label>
+                  <select id="so-item" required>
+                    <option value="">-- Select Medicine --</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Batch *</label>
+                  <select id="so-batch" required disabled>
+                    <option value="">-- Select medicine first --</option>
+                  </select>
+                  <div class="form-hint" id="so-batch-hint"></div>
+                </div>
+              </div>
+              <div class="form-grid form-grid-2">
+                <div class="form-group">
+                  <label class="form-label">Type *</label>
+                  <select id="so-type">
+                    <option value="Damaged">Damage</option>
+                    <option value="Expired">Expired</option>
+                    <option value="Return to Supplier">Return to Supplier</option>
+                    <option value="Correction">Stock Adjustment / Correction</option>
+                    <option value="Sample">Sample</option>
+                    <option value="Lost">Lost</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Quantity *</label>
+                  <input type="number" id="so-qty" placeholder="0" min="1">
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Reason / Notes</label>
+                <textarea id="so-reason" placeholder="Reason for stock out..."></textarea>
+              </div>
+              <button type="submit" class="btn btn-amber">📤 Record Stock Out</button>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <span class="card-title">🏬 Branches</span>
-      </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Store</th>
-              <th>Code</th>
-              <th>City / State</th>
-              <th>GSTIN</th>
-              <th>Drug License</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="storesTbody">
-            <tr><td colspan="7" class="empty-state">Loading stores…</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <div id="storesEmpty" style="display:none;">
-        <div class="empty-state">
-          <div class="empty-icon">🏬</div>
-          <h3>No stores yet</h3>
-          <p>Add your first branch to get started.</p>
+      <div class="card">
+        <div class="card-header"><span class="card-title">📜 Recent Stock Out</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Date</th><th>Medicine</th><th>Qty</th><th>Type</th><th>Reason</th></tr>
+            </thead>
+            <tbody id="recentStockOutTbody">
+              <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -119,6 +140,6 @@
 
 <script src="/js/api.js"></script>
 <script src="/js/shell.js"></script>
-<script src="/js/stores.js"></script>
+<script src="/js/stock-out.js"></script>
 </body>
 </html>

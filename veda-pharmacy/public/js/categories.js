@@ -34,24 +34,19 @@ function renderGrid(categories) {
   emptyState.style.display = 'none';
 
   grid.innerHTML = categories.map(c => `
-    <div class="card"${c.is_active ? '' : ' style="opacity:0.55;"'}>
-      <div class="card-body">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-          <span style="font-size:26px;">${escapeHtml(c.icon || '🏷️')}</span>
-          <div>
-            <strong>${escapeHtml(c.name)}</strong>
-            ${c.is_active ? '' : '<div><span class="badge badge-slate">Inactive</span></div>'}
-          </div>
-        </div>
-        ${c.description ? `<p class="muted" style="font-size:12px;margin-bottom:10px;">${escapeHtml(c.description)}</p>` : ''}
-        <div class="flex-between">
-          <span class="badge badge-green">${c.item_count} item${c.item_count === 1 ? '' : 's'}</span>
-          <div>
-            <button class="btn btn-secondary btn-sm" onclick="openModal(${c.id})">Edit</button>
-            ${c.is_active ? `<button class="btn btn-danger-outline btn-sm" onclick="handleDelete(${c.id})">Remove</button>` : ''}
-          </div>
+    <div class="card" style="padding:20px;${c.is_active ? '' : 'opacity:0.55;'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-size:28px;">${escapeHtml(c.icon || '🏷️')}</div>
+        <div class="row-actions">
+          <button class="btn btn-secondary btn-sm btn-icon" onclick="openModal(${c.id})" title="Edit">✏️</button>
+          ${c.is_active ? `<button class="btn btn-danger btn-sm btn-icon" onclick="handleDelete(${c.id})" title="Delete">🗑️</button>` : ''}
         </div>
       </div>
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;">
+        ${escapeHtml(c.name)}${c.is_active ? '' : ' <span class="badge badge-slate">Inactive</span>'}
+      </div>
+      <div style="color:var(--slate);font-size:12px;margin-bottom:12px;">${escapeHtml(c.description || 'No description')}</div>
+      <div style="font-size:12px;color:var(--teal);font-weight:600;">${c.item_count} medicine${c.item_count === 1 ? '' : 's'}</div>
     </div>
   `).join('');
 }

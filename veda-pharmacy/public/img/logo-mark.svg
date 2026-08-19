@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="VEDA Pharmacy">
+  <defs>
+    <linearGradient id="vedaBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3FA9E8"/>
+      <stop offset="100%" stop-color="#0B3D63"/>
+    </linearGradient>
+    <linearGradient id="vedaGreen" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#6FDB8F"/>
+      <stop offset="100%" stop-color="#0F8A4B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- V mark: two converging rounded strokes, blue (left) to green (right) -->
+  <path d="M 16 10 L 47 83" fill="none" stroke="url(#vedaBlue)" stroke-width="19" stroke-linecap="round"/>
+  <path d="M 84 10 L 53 83" fill="none" stroke="url(#vedaGreen)" stroke-width="19" stroke-linecap="round"/>
+
+  <!-- leaf accent breaking out of the green arm -->
+  <path d="M 66 16 C 78 12, 88 20, 86 32 C 74 32, 64 26, 66 16 Z" fill="#1F9D55"/>
+
+  <!-- two-tone capsule nested where the arms converge -->
+  <g transform="translate(50 60) rotate(45)">
+    <rect x="-15" y="-6.5" width="30" height="13" rx="6.5" fill="#FFFFFF" stroke="#0B3D63" stroke-width="2"/>
+    <path d="M -15 -6.5 H 0 V 6.5 H -15 A 6.5 6.5 0 0 1 -15 -6.5 Z" fill="url(#vedaBlue)"/>
+  </g>
+</svg>
